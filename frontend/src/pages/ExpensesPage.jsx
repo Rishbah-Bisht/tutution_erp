@@ -148,7 +148,7 @@ const ExpensesPage = () => {
         const coachingAddress = settings.instituteAddress || 'Institute Address';
         const coachingPhone = settings.primaryPhone || '+91 0000000000';
         const coachingEmail = settings.primaryEmail || 'info@institute.com';
-        const logoUrl = settings.instituteLogo ? (settings.instituteLogo.startsWith('http') ? settings.instituteLogo : `http://localhost:5000${settings.instituteLogo}`) : null;
+        const logoUrl = settings.instituteLogo ? (settings.instituteLogo.startsWith('http') ? settings.instituteLogo : `${API_BASE_URL}${settings.instituteLogo}`) : null;
 
         // --- Watermark (Standardized) ---
         if (logoUrl) {
@@ -298,7 +298,7 @@ const ExpensesPage = () => {
     };
 
     const viewReceipt = (url) => {
-        window.open(url.startsWith('http') ? url : `${BASE}${url}`, '_blank');
+        window.open(url.startsWith('http') ? url : `${API_BASE_URL}${url}`, '_blank');
     };
 
     const fmt = n => (Number(n) || 0).toLocaleString('en-IN');

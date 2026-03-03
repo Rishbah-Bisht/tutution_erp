@@ -26,7 +26,7 @@ const fmt = n => (Number(n) || 0).toLocaleString('en-IN');
 const imgSrc = p => {
     if (!p) return null;
     if (p.startsWith('http')) return p;
-    return `${BASE}${p}`;
+    return `${API_BASE_URL}${p}`;
 };
 
 const TeachersPage = () => {
@@ -256,7 +256,7 @@ const TeachersPage = () => {
                         teachers={teachers} loading={loading}
                         onView={setViewTeacher} onEdit={openEdit} onDelete={openDel}
                         onPayroll={setPayrollTeacher}
-                        fmt={fmt} imgSrc={imgSrc} BASE={BASE}
+                        fmt={fmt} imgSrc={imgSrc} BASE={API_BASE_URL}
                     />
                 )}
 

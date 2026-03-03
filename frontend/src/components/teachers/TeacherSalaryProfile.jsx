@@ -66,7 +66,7 @@ const TeacherSalaryProfile = () => {
         setMessage({ type: '', text: '' });
         try {
             const config = { headers: { Authorization: `Bearer ${token}` } };
-            await axios.patch('http://localhost:5000/api/teacher/bank-details', bankDetails, config);
+            await apiClient.patch('/teacher/bank-details', bankDetails, config);
             setMessage({ type: 'success', text: 'Bank details updated successfully!' });
             setTimeout(() => setMessage({ type: '', text: '' }), 3000);
         } catch (err) {
