@@ -23,9 +23,11 @@ const teacherAuthRoutes = require('./routes/teacher.auth.routes');
 
 const app = express();
 
-// Initialize schedulers
-initFeeScheduler();
-initSalaryScheduler();
+// Schedulers don't work in Vercel serverless — only start in local dev
+if (process.env.NODE_ENV !== 'production') {
+    initFeeScheduler();
+    initSalaryScheduler();
+}
 
 // Middleware
 const allowedOrigins = [
