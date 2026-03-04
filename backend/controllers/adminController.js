@@ -48,7 +48,7 @@ exports.signup = async (req, res) => {
             phone: phone || '',
             bio: bio || '',
             password: hashedPassword,
-            roomsAvailable,
+            roomsAvailable: Number(roomsAvailable) || 0,
             registrationNumber: registrationNumber || undefined,
             classesOffered: parsedClasses,
             instituteLogo,
@@ -58,9 +58,9 @@ exports.signup = async (req, res) => {
         });
 
         await admin.save();
-
         res.status(201).json({ message: 'Admin account created successfully' });
     } catch (error) {
+        console.error('[SignupError]', error);
         res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
@@ -98,11 +98,11 @@ exports.login = async (req, res) => {
                 adminName: admin.adminName,
                 coachingName: admin.coachingName,
                 email: admin.email,
-                instituteLogo: admin.instituteLogo,
-                themeColors: admin.themeColors
+                instituteLogo: admin.instituteLogo
             }
         });
     } catch (error) {
+        console.error('[LoginError]', error);
         res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
