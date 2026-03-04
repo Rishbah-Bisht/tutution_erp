@@ -17,7 +17,6 @@ const ExpenseFormModal = ({ isOpen, onClose, onSuccess, expense = null }) => {
         receiptUrl: '',
         status: 'Paid'
     });
-    const [fetchingSalary, setFetchingSalary] = useState(false);
 
     useEffect(() => {
         if (isOpen && expense) {
@@ -50,33 +49,18 @@ const ExpenseFormModal = ({ isOpen, onClose, onSuccess, expense = null }) => {
     const categories = ['Rent', 'Salary', 'Electricity', 'Maintenance', 'Marketing', 'Supplies', 'Other'];
     const paymentModes = ['Cash', 'UPI', 'Bank Transfer', 'Card', 'Cheque'];
 
-    const handleCategoryChange = async (e) => {
+    const handleCategoryChange = (e) => {
         const selectedCategory = e.target.value;
-        setForm(prev => ({ ...prev, category: selectedCategory }));
+        const formUpdate = { category: selectedCategory };
 
         if (selectedCategory === 'Salary') {
-            setFetchingSalary(true);
-            try {
-                const api = axios.create({
-                    baseURL: `${API_BASE_URL}/api`,
-                    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-                });
-                const { data } = await api.get('/teachers/summary');
-                if (data && data.monthlyPayroll) {
-                    setForm(prev => ({
-                        ...prev,
-                        amount: data.monthlyPayroll,
-                        title: prev.title || 'Monthly Faculty Payroll'
-                    }));
-                    toast.success('Auto-populated total faculty salary');
-                }
-            } catch (error) {
-                console.error('Failed to fetch salary data:', error);
-                toast.error('Could not auto-calculate total salary');
-            } finally {
-                setFetchingSalary(false);
-            }
+            formUpdate.title = 'Faculty Salary';
+            // Do not auto-load salary amount anymore as per request
+        } else if (selectedCategory !== 'Other') {
+            formUpdate.title = selectedCategory;
         }
+
+        setForm(prev => ({ ...prev, ...formUpdate }));
     };
 
     const handleSubmit = async (e) => {
@@ -118,131 +102,216 @@ const ExpenseFormModal = ({ isOpen, onClose, onSuccess, expense = null }) => {
     };
 
     return (
-        <div className="modal-overlay">
-            <div className="modal-content" style={{ maxWidth: 550 }}>
-                <div className="modal-header">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div className="modal-icon-container">
-                            <Receipt size={20} />
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+            <div className="modal" style={{ maxWidth: 600, width: '95vw', maxHeight: '90vh', borderRadius: '4px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+
+                {/* HEADER */}
+                <div style={{
+                    padding: '24px 32px',
+                    background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+                    position: 'relative',
+                    color: '#fff',
+                    overflow: 'hidden',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexShrink: 0
+                }}>
+                    <Receipt size={100} style={{ position: 'absolute', right: -10, bottom: -20, opacity: 0.1, color: '#fff' }} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, position: 'relative', zIndex: 1 }}>
+                        <div style={{ padding: 6, background: 'rgba(255,255,255,0.15)', borderRadius: '4px' }}>
+                            <IndianRupee size={18} />
                         </div>
                         <div>
-                            <h2 className="modal-title">{expense ? 'Edit Expense' : 'Record New Expense'}</h2>
-                            <p className="modal-subtitle">Track your institutional operational costs</p>
+                            <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, letterSpacing: '-0.02em' }}>
+                                {expense ? 'EDIT EXPENSE RECORD' : 'RECORD NEW EXPENSE'}
+                            </h3>
+                            <p style={{ margin: 0, fontSize: '0.8rem', opacity: 0.8, fontWeight: 500 }}>Track institutional operational costs</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="modal-close">
-                        <X size={20} />
+                    <button type="button" onClick={onClose} style={{
+                        background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: '4px',
+                        width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: '#fff', cursor: 'pointer', position: 'relative', zIndex: 1
+                    }}>
+                        <X size={18} />
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit}>
-                    <div className="modal-body">
-                        <div className="form-grid">
-                            <div className="form-group full-width">
-                                <label className="form-label">Expense Title*</label>
-                                <input
-                                    type="text"
-                                    name="title"
-                                    className="form-input"
-                                    placeholder="e.g. Monthly Rent, Electricity Bill"
-                                    value={form.title}
-                                    onChange={handle}
-                                    required
-                                />
-                            </div>
+                <div className="modal-body" style={{ overflowY: 'auto', flex: 1, background: '#fff' }}>
+                    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                        <div style={{ padding: '32px', flex: 1 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
 
-                            <div className="form-group">
-                                <label className="form-label">Category</label>
-                                <select
-                                    name="category"
-                                    className="form-input"
-                                    value={form.category}
-                                    onChange={handleCategoryChange}
-                                >
-                                    {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                                </select>
-                            </div>
-
-                            <div className="form-group">
-                                <label className="form-label">Amount (₹)*</label>
-                                <div style={{ position: 'relative' }}>
-                                    <input
-                                        type="number"
-                                        name="amount"
-                                        className="form-input input-with-icon-left"
-                                        placeholder="0.00"
-                                        value={form.amount}
-                                        onChange={handle}
-                                        required
-                                        disabled={fetchingSalary}
-                                    />
-                                    <IndianRupee size={14} className="input-icon-left" />
+                                <div style={{ gridColumn: 'span 2' }}>
+                                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 900, color: '#475569', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        Expense Title*
+                                    </label>
+                                    <div style={{ position: 'relative' }}>
+                                        <Tag size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                                        <input
+                                            type="text"
+                                            name="title"
+                                            placeholder="e.g. Monthly Rent, Electricity Bill"
+                                            value={form.title}
+                                            onChange={handle}
+                                            required
+                                            style={{
+                                                width: '100%', padding: '12px 12px 12px 40px', borderRadius: '4px', border: '1px solid #e2e8f0',
+                                                fontSize: '0.9rem', fontWeight: 600, color: '#1e293b', background: '#f8fafc'
+                                            }}
+                                        />
+                                    </div>
                                 </div>
-                            </div>
 
-                            <div className="form-group">
-                                <label className="form-label">Expense Date</label>
-                                <div style={{ position: 'relative' }}>
-                                    <input
-                                        type="date"
-                                        name="date"
-                                        className="form-input input-with-icon-left"
-                                        value={form.date}
-                                        onChange={handle}
-                                    />
-                                    <Calendar size={14} className="input-icon-left" />
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 900, color: '#475569', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        Category
+                                    </label>
+                                    <select
+                                        name="category"
+                                        value={form.category}
+                                        onChange={handleCategoryChange}
+                                        style={{
+                                            width: '100%', padding: '12px', borderRadius: '4px', border: '1px solid #e2e8f0',
+                                            fontSize: '0.9rem', fontWeight: 600, color: '#1e293b', background: '#f8fafc'
+                                        }}
+                                    >
+                                        {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                    </select>
                                 </div>
-                            </div>
 
-                            <div className="form-group">
-                                <label className="form-label">Payment Mode</label>
-                                <select
-                                    name="paymentMode"
-                                    className="form-input"
-                                    value={form.paymentMode}
-                                    onChange={handle}
-                                >
-                                    {paymentModes.map(mode => <option key={mode} value={mode}>{mode}</option>)}
-                                </select>
-                            </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 900, color: '#475569', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        Amount (₹)*
+                                    </label>
+                                    <div style={{ position: 'relative' }}>
+                                        <IndianRupee size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#059669' }} />
+                                        <input
+                                            type="number"
+                                            name="amount"
+                                            placeholder="0.00"
+                                            value={form.amount}
+                                            onChange={handle}
+                                            required
+                                            style={{
+                                                width: '100%', padding: '12px 12px 12px 40px', borderRadius: '4px', border: '1px solid #e2e8f0',
+                                                fontSize: '0.9rem', fontWeight: 900, color: '#059669', background: '#f8fafc'
+                                            }}
+                                        />
+                                    </div>
+                                </div>
 
-                            <div className="form-group full-width">
-                                <label className="form-label">Description (Optional)</label>
-                                <div style={{ position: 'relative' }}>
-                                    <textarea
-                                        name="description"
-                                        className="form-input input-with-icon-left"
-                                        placeholder="Add details about the transaction..."
-                                        value={form.description}
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 900, color: '#475569', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        Expense Date
+                                    </label>
+                                    <div style={{ position: 'relative' }}>
+                                        <Calendar size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                                        <input
+                                            type="date"
+                                            name="date"
+                                            value={form.date}
+                                            onChange={handle}
+                                            style={{
+                                                width: '100%', padding: '12px 12px 12px 40px', borderRadius: '4px', border: '1px solid #e2e8f0',
+                                                fontSize: '0.9rem', fontWeight: 600, color: '#1e293b', background: '#f8fafc'
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 900, color: '#475569', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        Payment Mode
+                                    </label>
+                                    <select
+                                        name="paymentMode"
+                                        value={form.paymentMode}
                                         onChange={handle}
-                                        rows={2}
-                                        style={{ height: 'auto', paddingTop: 10 }}
-                                    />
-                                    <FileText size={14} className="input-icon-left" style={{ top: 15 }} />
+                                        style={{
+                                            width: '100%', padding: '12px', borderRadius: '4px', border: '1px solid #e2e8f0',
+                                            fontSize: '0.9rem', fontWeight: 600, color: '#1e293b', background: '#f8fafc'
+                                        }}
+                                    >
+                                        {paymentModes.map(mode => <option key={mode} value={mode}>{mode}</option>)}
+                                    </select>
+                                </div>
+
+                                <div style={{ gridColumn: 'span 2' }}>
+                                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 900, color: '#475569', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        Payment Status
+                                    </label>
+                                    <div style={{ display: 'flex', gap: 12 }}>
+                                        {['Paid', 'Pending'].map(status => (
+                                            <button
+                                                key={status}
+                                                type="button"
+                                                onClick={() => setForm(prev => ({ ...prev, status }))}
+                                                style={{
+                                                    flex: 1, padding: '12px', borderRadius: '4px', cursor: 'pointer',
+                                                    fontSize: '0.8rem', fontWeight: 800, transition: 'all 0.2s',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                                                    background: form.status === status ? (status === 'Paid' ? '#ecfdf5' : '#fff7ed') : '#f8fafc',
+                                                    border: `1px solid ${form.status === status ? (status === 'Paid' ? '#10b981' : '#f97316') : '#e2e8f0'}`,
+                                                    color: form.status === status ? (status === 'Paid' ? '#059669' : '#c2410b') : '#64748b'
+                                                }}
+                                            >
+                                                {status === 'Paid' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                                                {status.toUpperCase()}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div style={{ gridColumn: 'span 2' }}>
+                                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 900, color: '#475569', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        Description (Optional)
+                                    </label>
+                                    <div style={{ position: 'relative' }}>
+                                        <FileText size={16} style={{ position: 'absolute', left: 12, top: 14, color: '#94a3b8' }} />
+                                        <textarea
+                                            name="description"
+                                            placeholder="Add details about the transaction..."
+                                            value={form.description}
+                                            onChange={handle}
+                                            rows={3}
+                                            style={{
+                                                width: '100%', padding: '12px 12px 12px 40px', borderRadius: '4px', border: '1px solid #e2e8f0',
+                                                fontSize: '0.9rem', fontWeight: 600, color: '#1e293b', background: '#f8fafc', resize: 'none'
+                                            }}
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div className="modal-footer">
-                        <button type="button" onClick={onClose} className="btn-secondary">
-                            Cancel
-                        </button>
-                        <button type="submit" className="btn-primary" disabled={loading}>
-                            {loading ? (
-                                <>
-                                    <Loader2 size={16} className="animate-spin" />
-                                    <span>Saving...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <CheckCircle2 size={16} />
-                                    <span>{expense ? 'Update Expense' : 'Save Expense'}</span>
-                                </>
-                            )}
-                        </button>
-                    </div>
-                </form>
+                        {/* FOOTER */}
+                        <div style={{ padding: '20px 32px', borderTop: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', justifyContent: 'flex-end', gap: 12, flexShrink: 0 }}>
+                            <button type="button" onClick={onClose} disabled={loading} style={{
+                                padding: '10px 24px', borderRadius: '4px', border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontWeight: 800, fontSize: '0.7rem', cursor: 'pointer'
+                            }}>
+                                CANCEL
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                style={{
+                                    padding: '10px 32px', background: loading ? '#94a3b8' : '#059669', color: '#fff',
+                                    borderRadius: '4px', border: 'none', fontWeight: 800, fontSize: '0.7rem', cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', gap: 8
+                                }}
+                            >
+                                {loading ? <><Loader2 className="spin" size={14} /> SAVING...</> : (
+                                    <>
+                                        <CheckCircle2 size={14} />
+                                        {expense ? "UPDATE EXPENSE" : "SAVE EXPENSE"}
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     );

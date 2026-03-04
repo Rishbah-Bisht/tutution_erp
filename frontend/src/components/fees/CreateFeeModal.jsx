@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Receipt, User, Calendar, IndianRupee, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import axios from 'axios';
 
@@ -12,6 +12,10 @@ const API = () => axios.create({
 const CreateFeeModal = ({ onClose, onSave }) => {
     const [students, setStudents] = useState([]);
     const [batches, setBatches] = useState([]);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [searching, setSearching] = useState(false);
+    const dropdownRef = useRef(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
@@ -31,13 +35,12 @@ const CreateFeeModal = ({ onClose, onSave }) => {
     ];
 
     useEffect(() => {
-        const fetchData = async () => {
+        const fetchInitialData = async () => {
             try {
-                const [sRes, bRes] = await Promise.all([
-                    API().get('/students?limit=1000'),
+                const [bRes] = await Promise.all([
                     API().get('/batches')
                 ]);
-                setStudents(sRes.data.students || []);
+                setStudents([]); // Start with empty list
                 setBatches(bRes.data.batches || []);
             } catch (err) {
                 setError({ message: 'Failed to load students or batches' });
@@ -45,22 +48,53 @@ const CreateFeeModal = ({ onClose, onSave }) => {
                 setLoading(false);
             }
         };
-        fetchData();
+        fetchInitialData();
     }, []);
 
-    const handleStudentChange = (e) => {
-        const studentId = e.target.value;
-        const student = students.find(s => s._id === studentId);
-        if (student) {
-            setForm({
-                ...form,
-                studentId,
-                batchId: student.batchId?._id || student.batchId || '',
-                amount: student.batchId?.fees || student.fees || ''
-            });
-        } else {
-            setForm({ ...form, studentId: '' });
-        }
+    // Handle clicks outside the searchable dropdown to close it
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // Debounced Server-Side Search
+    useEffect(() => {
+        const fetchSearchResults = async () => {
+            if (!searchQuery) {
+                setStudents([]); // Clear list if query is empty
+                return;
+            }
+            if (form.studentId) return; // Skip if a student is already selected
+
+            setSearching(true);
+            try {
+                const res = await API().get(`/students?search=${encodeURIComponent(searchQuery)}&limit=15`);
+                setStudents(res.data.students || []);
+            } catch (err) {
+                console.error("Failed to search students:", err);
+            } finally {
+                setSearching(false);
+            }
+        };
+
+        const timeoutId = setTimeout(fetchSearchResults, 300); // 300ms debounce
+        return () => clearTimeout(timeoutId);
+    }, [searchQuery, form.studentId]);
+
+    const handleStudentSelect = (student) => {
+        setForm({
+            ...form,
+            studentId: student._id,
+            batchId: student.batchId?._id || student.batchId || '',
+            amount: student.batchId?.fees || student.fees || ''
+        });
+        setSearchQuery(`${student.name} (${student.rollNo})`);
+        setIsDropdownOpen(false);
     };
 
     const handleSubmit = async (e) => {
@@ -160,20 +194,69 @@ const CreateFeeModal = ({ onClose, onSave }) => {
                                 </div>
                             )}
 
-                            <div className="mf">
+                            <div className="mf" style={{ position: 'relative' }} ref={dropdownRef}>
                                 <label>Select Student *</label>
-                                <select
-                                    value={form.studentId}
-                                    onChange={handleStudentChange}
-                                    required
-                                >
-                                    <option value="">Choose a student...</option>
-                                    {students.map(s => (
-                                        <option key={s._id} value={s._id}>
-                                            {s.name} ({s.rollNo})
-                                        </option>
-                                    ))}
-                                </select>
+                                <input
+                                    type="text"
+                                    placeholder="Search by student name, roll no or phone..."
+                                    value={searchQuery}
+                                    onChange={(e) => {
+                                        setSearchQuery(e.target.value);
+                                        setIsDropdownOpen(true);
+                                        // Reset form if they start typing again
+                                        if (form.studentId) setForm({ ...form, studentId: '', batchId: '', amount: '' });
+                                    }}
+                                    onFocus={() => setIsDropdownOpen(true)}
+                                    style={{
+                                        width: '100%', padding: '10px 14px', borderRadius: 8,
+                                        border: '1px solid #e2e8f0', fontSize: '0.9rem', outline: 'none'
+                                    }}
+                                    required={!form.studentId}
+                                />
+                                {isDropdownOpen && (
+                                    <div style={{
+                                        position: 'absolute', top: '100%', left: 0, right: 0,
+                                        background: '#fff', border: '1px solid #e2e8f0',
+                                        borderRadius: 8, marginTop: 4, maxHeight: 220,
+                                        overflowY: 'auto', zIndex: 10, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'
+                                    }}>
+                                        {searching ? (
+                                            <div style={{ padding: '16px', color: '#64748b', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                                                <Loader2 size={16} className="spin" /> Searching...
+                                            </div>
+                                        ) : !searchQuery && !form.studentId ? (
+                                            <div style={{ padding: '16px', color: '#64748b', textAlign: 'center', fontSize: '0.85rem' }}>
+                                                Start typing to search for a student...
+                                            </div>
+                                        ) : students.length > 0 ? students.map(s => (
+                                            <div
+                                                key={s._id}
+                                                onClick={() => handleStudentSelect(s)}
+                                                style={{
+                                                    padding: '10px 16px', cursor: 'pointer',
+                                                    borderBottom: '1px solid #f1f5f9', display: 'flex',
+                                                    justifyContent: 'space-between', alignItems: 'center'
+                                                }}
+                                                onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
+                                                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                            >
+                                                <div>
+                                                    <div style={{ fontWeight: 600, color: '#1e293b' }}>{s.name}</div>
+                                                    <div style={{ fontSize: '0.8rem', color: '#64748b' }}>Roll: {s.rollNo}</div>
+                                                </div>
+                                                {s.batchId && (
+                                                    <div style={{ fontSize: '0.75rem', background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: 12 }}>
+                                                        {s.batchId.name || 'Assigned'}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )) : (
+                                            <div style={{ padding: '12px 16px', color: '#64748b', fontStyle: 'italic', textAlign: 'center' }}>
+                                                No students matched your search
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="mf-row">

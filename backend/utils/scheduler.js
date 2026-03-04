@@ -1,6 +1,9 @@
 const cron = require('node-cron');
 const feeController = require('../controllers/fee.controller');
 const payrollController = require('../controllers/teacher.payroll.controller');
+const Fee = require('../models/Fee');
+const Student = require('../models/Student');
+const { queueNotification } = require('../services/emailService');
 
 /**
  * Automates monthly fee generation for all active students.
@@ -71,4 +74,63 @@ const initSalaryScheduler = () => {
     console.log('[Scheduler] Salary generation service initialized.');
 };
 
-module.exports = { initFeeScheduler, initSalaryScheduler };
+/**
+ * Daily check for due fees. Sends reminders 3 days before and on the due date.
+ * Runs every day at 09:00 AM.
+ */
+const initReminderScheduler = () => {
+    // 0 9 * * * -> 9:00 AM every day
+    cron.schedule('0 9 * * *', async () => {
+        console.log('[Scheduler] Running daily fee reminder check...');
+        try {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const threeDaysFromNow = new Date(today);
+            threeDaysFromNow.setDate(today.getDate() + 3);
+
+            // Find unpaid fees due today or in 3 days
+            const targetFees = await Fee.find({
+                status: { $in: ['pending', 'partial', 'overdue'] },
+                isDeleted: { $ne: true },
+                dueDate: {
+                    $gte: today,
+                    $lte: threeDaysFromNow
+                }
+            }).populate('studentId');
+
+            console.log(`[Scheduler] Found ${targetFees.length} potential fee reminders to send.`);
+
+            for (const fee of targetFees) {
+                const s = fee.studentId;
+                if (!s || !s.email) continue;
+
+                const feeDueDate = new Date(fee.dueDate);
+                feeDueDate.setHours(0, 0, 0, 0);
+
+                let shouldNotify = false;
+                if (feeDueDate.getTime() === today.getTime()) shouldNotify = true;
+                if (feeDueDate.getTime() === threeDaysFromNow.getTime()) shouldNotify = true;
+
+                if (shouldNotify) {
+                    await queueNotification({
+                        recipientEmail: s.email,
+                        recipientName: s.name,
+                        subject: 'Fee Due Reminder - ABC Institute',
+                        type: 'fee_reminder',
+                        data: {
+                            amount: fee.pendingAmount,
+                            dueDate: feeDueDate.toLocaleDateString()
+                        }
+                    });
+                }
+            }
+        } catch (err) {
+            console.error('[Scheduler] Error in fee reminder check:', err);
+        }
+    });
+
+    console.log('[Scheduler] Fee reminder service initialized (Daily at 9:00 AM).');
+};
+
+module.exports = { initFeeScheduler, initSalaryScheduler, initReminderScheduler };

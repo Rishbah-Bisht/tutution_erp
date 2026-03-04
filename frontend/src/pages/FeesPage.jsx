@@ -17,6 +17,7 @@ import RecordPaymentModal from '../components/fees/RecordPaymentModal';
 import PaymentHistoryModal from '../components/fees/PaymentHistoryModal';
 import CreateFeeModal from '../components/fees/CreateFeeModal';
 import AddExpenseModal from '../components/fees/AddExpenseModal';
+import ActionModal from '../components/common/ActionModal';
 
 import { API_BASE_URL } from '../api/apiConfig';
 
@@ -43,6 +44,19 @@ const FeesPage = () => {
     const [genForm, setGenForm] = useState({ month: '', year: (new Date().getFullYear().toString()), dueDate: '' });
     const [saving, setSaving] = useState(false);
     const [err, setErr] = useState('');
+    const [selectedIds, setSelectedIds] = useState([]);
+    const [bulkForm, setBulkForm] = useState({ title: '', amount: '', description: '', date: new Date().toISOString().split('T')[0] });
+
+    // Action Modal States
+    const [actionState, setActionState] = useState({
+        isOpen: false,
+        type: 'verify',
+        title: '',
+        desc: '',
+        onConfirm: null,
+        loading: false,
+        error: ''
+    });
 
     const loadBatches = async () => {
         try {
@@ -86,7 +100,10 @@ const FeesPage = () => {
     }, [search, status, batchId, course, page, navigate]);
 
     useEffect(() => { loadMetrics(); loadBatches(); }, []);
-    useEffect(() => { load(); }, [load]);
+    useEffect(() => {
+        load();
+        setSelectedIds([]); // Clear selection when filters change
+    }, [load]);
 
     // De-bounced search
     useEffect(() => {
@@ -391,34 +408,84 @@ const FeesPage = () => {
     };
 
     const handleRecordPayment = async (formData) => {
+        setActionState({
+            isOpen: true,
+            type: 'verify',
+            title: 'Authorize Payment',
+            desc: `You are recording a payment of ₹${formData.amountPaid} for "${selFee.studentId?.name}". Please enter admin password to confirm.`,
+            onConfirm: (pwd) => confirmPayment(formData, pwd),
+            loading: false,
+            error: ''
+        });
+    };
+
+    const confirmPayment = async (formData, pwd) => {
+        setActionState(prev => ({ ...prev, loading: true, error: '' }));
         try {
-            const { data } = await API().post(`/fees/${selFee._id}/pay`, formData);
+            const { data } = await API().post(`/fees/${selFee._id}/pay`, { ...formData, adminPassword: pwd });
             if (data.receiptNo) {
                 const pData = { ...formData, amount: parseFloat(formData.amountPaid), receiptNo: data.receiptNo, date: new Date() };
                 const url = await generateReceipt({ ...selFee, ...formData }, pData, true);
                 setPreviewPdf({ isOpen: true, blobUrl: url, filename: `Receipt_${data.receiptNo}.pdf` });
             }
+            setActionState(prev => ({ ...prev, isOpen: false }));
+            setModal(false);
             load();
             loadMetrics();
         } catch (e) {
-            alert(e.response?.data?.message || 'Payment failed');
+            setActionState(prev => ({ ...prev, loading: false, error: e.response?.data?.message || 'Authorization failed' }));
         }
     };
 
-    const handleCreateFee = async (formData) => {
-        await API().post('/fees', formData);
-        load();
-        loadMetrics();
+    const handleCreateFee = (formData) => {
+        setActionState({
+            isOpen: true,
+            type: 'verify',
+            title: 'Authorize Fee Creation',
+            desc: `You are creating a manual fee record for student. This will alter the student's financial ledger. Please verify.`,
+            onConfirm: (pwd) => confirmCreateFee(formData, pwd),
+            loading: false,
+            error: ''
+        });
     };
 
-    const generate = async (e) => {
-        e.preventDefault();
-        setSaving(true); setErr('');
+    const confirmCreateFee = async (formData, pwd) => {
+        setActionState(prev => ({ ...prev, loading: true, error: '' }));
         try {
-            await API().post('/fees/generate', genForm);
-            setModal(false); load(); loadMetrics();
-        } catch (e) { setErr(e.response?.data?.message || 'Failed to generate fees'); }
-        finally { setSaving(false); }
+            await API().post('/fees', { ...formData, adminPassword: pwd });
+            setActionState(prev => ({ ...prev, isOpen: false }));
+            setModal(false);
+            load();
+            loadMetrics();
+        } catch (e) {
+            setActionState(prev => ({ ...prev, loading: false, error: e.response?.data?.message || 'Authorization failed' }));
+        }
+    };
+
+    const generate = (e) => {
+        e.preventDefault();
+        setActionState({
+            isOpen: true,
+            type: 'warning',
+            title: 'Authorize Bulk Genesis',
+            desc: `URGENT: This will generate fee records for ALL active students for ${genForm.month} ${genForm.year}. This is a major operation.`,
+            onConfirm: (pwd) => confirmBulkGenesis(pwd),
+            loading: false,
+            error: ''
+        });
+    };
+
+    const confirmBulkGenesis = async (pwd) => {
+        setActionState(prev => ({ ...prev, loading: true, error: '' }));
+        try {
+            await API().post('/fees/generate', { ...genForm, adminPassword: pwd });
+            setActionState(prev => ({ ...prev, isOpen: false }));
+            setModal(false);
+            load();
+            loadMetrics();
+        } catch (e) {
+            setActionState(prev => ({ ...prev, loading: false, error: e.response?.data?.message || 'Bulk generation failed' }));
+        }
     };
 
     const exportData = () => {
@@ -455,11 +522,49 @@ const FeesPage = () => {
 
 
 
+    const toggleSelect = (id) => {
+        setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+    };
+
+    const handleSelectAll = (e) => {
+        if (e.target.checked) {
+            setSelectedIds(fees.map(f => f._id));
+        } else {
+            setSelectedIds([]);
+        }
+    };
+
+    const handleBulkSurcharge = (formData) => {
+        setActionState({
+            isOpen: true,
+            type: 'verify',
+            title: 'Authorize Bulk Surcharge',
+            desc: `Applying ₹${formData.amount} surcharge to ${selectedIds.length} students. This will alter multiple financial records. Authorize?`,
+            onConfirm: (pwd) => confirmBulkSurcharge(formData, pwd),
+            loading: false,
+            error: ''
+        });
+    };
+
+    const confirmBulkSurcharge = async (formData, pwd) => {
+        setActionState(prev => ({ ...prev, loading: true, error: '' }));
+        try {
+            await API().post('/fees/bulk-surcharge', { ...formData, feeIds: selectedIds, adminPassword: pwd });
+            setActionState(prev => ({ ...prev, isOpen: false }));
+            setSelectedIds([]);
+            setModal(false);
+            load();
+            loadMetrics();
+        } catch (e) {
+            setActionState(prev => ({ ...prev, loading: false, error: e.response?.data?.message || 'Bulk operation failed' }));
+        }
+    };
+
     const fmt = n => (n || 0).toLocaleString('en-IN');
 
     // Stats Configuration
     const stats = [
-        { label: 'Total Revenue', value: '₹' + fmt(metrics?.totalCollected), icon: Wallet, color: 'emerald', bg: 'bg-emerald-500/10', text: 'text-emerald-600' },
+        { label: 'Total Revenue', value: '₹' + fmt(metrics?.totalCollected), icon: Wallet, color: 'indigo', bg: 'bg-indigo-500/10', text: 'text-indigo-600' },
         { label: `Pending Dues (${metrics?.pendingStudents || 0} Students)`, value: '₹' + fmt(metrics?.totalPending), icon: Clock, color: 'blue', bg: 'bg-blue-500/10', text: 'text-blue-600' },
         { label: 'Overdue Dues', value: '₹' + fmt(metrics?.overdueAmount), icon: AlertCircle, color: 'red', bg: 'bg-red-500/10', text: 'text-red-600' },
         { label: 'This Month', value: '₹' + fmt(metrics?.monthlyCollection), icon: LineChart, color: 'indigo', bg: 'bg-indigo-500/10', text: 'text-indigo-600' },
@@ -467,8 +572,8 @@ const FeesPage = () => {
 
     const getStatusStyles = (s) => {
         switch (s) {
-            case 'paid': return 'bg-emerald-50 text-emerald-700 border-emerald-100 ring-emerald-500/10';
-            case 'partial': return 'bg-blue-50 text-blue-700 border-blue-100 ring-blue-500/10';
+            case 'paid': return 'bg-green-50 text-green-700 border-green-100 ring-green-500/10';
+            case 'partial': return 'bg-amber-50 text-amber-700 border-amber-100 ring-amber-500/10';
             case 'overdue': return 'bg-red-50 text-red-700 border-red-100 ring-red-500/10';
             default: return 'bg-slate-50 text-slate-700 border-slate-100 ring-slate-500/10';
         }
@@ -497,7 +602,7 @@ const FeesPage = () => {
             <div className="stats-grid">
                 {stats.map((s, i) => (
                     <div key={i} className="stat-card">
-                        <div className={`stat-icon ${s.color === 'emerald' ? 'ic-green' : s.color === 'blue' ? 'ic-blue' : s.color === 'red' ? 'ic-red' : 'ic-indigo'}`}>
+                        <div className={`stat-icon ic-indigo`}>
                             <s.icon size={22} className={s.text} />
                         </div>
                         <div>
@@ -509,7 +614,7 @@ const FeesPage = () => {
             </div>
 
             {/* ── Filter Bar ──────────────────────────────── */}
-            <div className="card toolbar rounded-3xl" style={{ marginBottom: 20 }}>
+            <div className="card toolbar rounded-md" style={{ marginBottom: 20 }}>
                 <div className="tb-search-wrap">
                     <Search size={15} />
                     <input
@@ -569,6 +674,14 @@ const FeesPage = () => {
                         <table className="erp-table">
                             <thead>
                                 <tr>
+                                    <th className="w-10 text-center">
+                                        <input
+                                            type="checkbox"
+                                            className="checkbox checkbox-sm checkbox-primary"
+                                            checked={fees.length > 0 && selectedIds.length === fees.length}
+                                            onChange={handleSelectAll}
+                                        />
+                                    </th>
                                     <th>Student</th>
                                     <th>Period</th>
                                     <th>Financials</th>
@@ -579,7 +692,15 @@ const FeesPage = () => {
                             </thead>
                             <tbody>
                                 {fees.map(f => (
-                                    <tr key={f._id}>
+                                    <tr key={f._id} className={selectedIds.includes(f._id) ? 'bg-indigo-50/50' : ''}>
+                                        <td className="text-center">
+                                            <input
+                                                type="checkbox"
+                                                className="checkbox checkbox-sm checkbox-primary"
+                                                checked={selectedIds.includes(f._id)}
+                                                onChange={() => toggleSelect(f._id)}
+                                            />
+                                        </td>
                                         <td>
                                             <div className="flex items-center gap-3">
                                                 <div className="tb-avatar" style={{ width: 32, height: 32, fontSize: 13 }}>
@@ -624,8 +745,9 @@ const FeesPage = () => {
                                         <td className="text-center">
                                             <span className={`badge ${f.status === 'paid' ? 'badge-active' : f.status === 'overdue' ? 'badge-overdue' : ''}`}
                                                 style={{
-                                                    background: f.status === 'partial' ? 'var(--ic-blue-bg)' : '',
-                                                    color: f.status === 'partial' ? 'var(--erp-accent)' : ''
+                                                    background: f.status === 'partial' ? '#fffbeb' : '',
+                                                    color: f.status === 'partial' ? '#d97706' : '',
+                                                    border: f.status === 'partial' ? '1px solid #fde68a' : ''
                                                 }}>
                                                 {f.status}
                                             </span>
@@ -759,6 +881,120 @@ const FeesPage = () => {
                     </div>
                 </div>
             )}
+            {modal === 'bulk-expense' && (
+                <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setModal(false)}>
+                    <div className="modal" style={{ maxWidth: 480 }}>
+                        <div style={{ padding: '24px', background: '#ca8a04', color: '#fff' }}>
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-white/20 rounded-lg">
+                                    <PlusCircle size={24} />
+                                </div>
+                                <div>
+                                    <h2 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>Bulk Surcharge</h2>
+                                    <p style={{ fontSize: '0.85rem', opacity: 0.9 }}>Add expense to {selectedIds.length} records</p>
+                                </div>
+                            </div>
+                        </div>
+                        <form onSubmit={(e) => { e.preventDefault(); handleBulkSurcharge(bulkForm); }}>
+                            <div className="modal-body" style={{ padding: '24px' }}>
+                                <div className="mf">
+                                    <label>Surcharge Title</label>
+                                    <input
+                                        placeholder="e.g. Festival Charges, Exam Fee..."
+                                        value={bulkForm.title}
+                                        onChange={e => setBulkForm({ ...bulkForm, title: e.target.value })}
+                                        required
+                                    />
+                                </div>
+                                <div className="mf-row mt-4">
+                                    <div className="mf">
+                                        <label>Amount (₹)</label>
+                                        <input
+                                            type="number"
+                                            placeholder="0.00"
+                                            value={bulkForm.amount}
+                                            onChange={e => setBulkForm({ ...bulkForm, amount: e.target.value })}
+                                            required
+                                        />
+                                    </div>
+                                    <div className="mf">
+                                        <label>Date</label>
+                                        <input
+                                            type="date"
+                                            value={bulkForm.date}
+                                            onChange={e => setBulkForm({ ...bulkForm, date: e.target.value })}
+                                            required
+                                        />
+                                    </div>
+                                </div>
+                                <div className="mf mt-4">
+                                    <label>Notes (Optional)</label>
+                                    <textarea
+                                        placeholder="Reason for surcharge..."
+                                        style={{ height: 80 }}
+                                        value={bulkForm.description}
+                                        onChange={e => setBulkForm({ ...bulkForm, description: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                            <div className="modal-footer" style={{ padding: '16px 24px', background: 'var(--erp-bg2)', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+                                <button type="button" className="btn btn-outline" onClick={() => setModal(false)}>Cancel</button>
+                                <button type="submit" className="btn btn-primary" style={{ background: '#ca8a04', borderColor: '#ca8a04' }}>
+                                    Apply to {selectedIds.length} Students
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Floating Bulk Action Bar */}
+            {selectedIds.length > 0 && (
+                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[900] animate-in fade-in slide-in-from-bottom-5 duration-300">
+                    <div className="bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl border border-slate-700 flex items-center gap-8 min-w-[400px]">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center font-bold text-lg">
+                                {selectedIds.length}
+                            </div>
+                            <div>
+                                <div className="text-sm font-bold">Selected Records</div>
+                                <div className="text-[10px] text-slate-400 font-medium">Bulk operations ready</div>
+                            </div>
+                        </div>
+
+                        <div className="h-10 w-px bg-slate-700"></div>
+
+                        <div className="flex gap-3">
+                            <button
+                                className="btn btn-sm btn-outline  !border-slate-700 hover:!bg-slate-800"
+                                onClick={() => setSelectedIds([])}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="btn btn-sm bg-[#ca8a04] hover:bg-[#a16207] border-none text-white flex gap-2"
+                                onClick={() => {
+                                    setBulkForm({ title: '', amount: '', description: '', date: new Date().toISOString().split('T')[0] });
+                                    setModal('bulk-expense');
+                                }}
+                            >
+                                <PlusCircle size={14} /> Add Surcharge
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <ActionModal
+                isOpen={actionState.isOpen}
+                onClose={() => setActionState(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={actionState.onConfirm}
+                title={actionState.title}
+                description={actionState.desc}
+                actionType={actionState.type}
+                loading={actionState.loading}
+                error={actionState.error}
+            />
         </ERPLayout>
     );
 };

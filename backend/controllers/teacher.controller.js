@@ -4,6 +4,7 @@ const Student = require('../models/Student');
 const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
+const { queueNotification } = require('../services/emailService');
 
 // GET /api/teachers
 exports.getAllTeachers = async (req, res) => {
@@ -107,6 +108,21 @@ exports.createTeacher = async (req, res) => {
         });
 
         await teacher.save();
+
+        // Email Notification: Teacher Admission
+        if (teacher.email) {
+            queueNotification({
+                recipientEmail: teacher.email,
+                recipientName: teacher.name,
+                subject: `Welcome to ABC Institute — Your Faculty Account`,
+                type: 'teacher_admission',
+                data: {
+                    regNo: teacher.regNo,
+                    designation: teacher.designation || 'Faculty'
+                }
+            }).catch(e => console.error('[TeacherEmail] Admission notification error:', e));
+        }
+
         res.status(201).json({ message: 'Teacher created', teacher });
     } catch (err) {
         console.error('[createTeacher]', err);
@@ -170,6 +186,32 @@ exports.deleteTeacher = async (req, res) => {
     }
 };
 
+// PUT /api/teachers/bulk-update
+exports.bulkUpdate = async (req, res) => {
+    try {
+        const { ids, updates } = req.body;
+        if (!ids || !ids.length) return res.status(400).json({ message: 'No IDs provided' });
+        if (!updates || typeof updates !== 'object') return res.status(400).json({ message: 'No updates provided' });
+        const allowedFields = ['status', 'department', 'designation'];
+        const cleanUpdates = {};
+
+        allowedFields.forEach(field => {
+            if (updates[field] !== undefined && updates[field] !== '') {
+                cleanUpdates[field] = String(updates[field]).trim();
+            }
+        });
+
+        if (Object.keys(cleanUpdates).length === 0) {
+            return res.status(400).json({ message: 'No valid fields provided for update' });
+        }
+
+        await Teacher.updateMany({ _id: { $in: ids } }, { $set: cleanUpdates });
+        res.json({ message: `Successfully updated ${ids.length} faculty members.` });
+    } catch (err) {
+        res.status(500).json({ message: 'Server error', error: err.message });
+    }
+};
+
 // GET /api/batches/:id/subjects — batch subjects + who is assigned
 exports.getBatchSubjectsWithAssignments = async (req, res) => {
     try {
@@ -193,6 +235,85 @@ exports.getBatchSubjectsWithAssignments = async (req, res) => {
         });
 
         res.json({ batchId: batch._id, batchName: batch.name, subjects: batch.subjects || [], assignments: assignedMap });
+    } catch (err) {
+        res.status(500).json({ message: 'Server error', error: err.message });
+    }
+};
+
+// POST /api/teachers/bulk
+exports.bulkUpload = async (req, res) => {
+    try {
+        const { teachers } = req.body;
+        if (!Array.isArray(teachers) || teachers.length === 0)
+            return res.status(400).json({ message: 'No teacher data provided' });
+
+        const currentYear = new Date().getFullYear() % 100;
+        const yearPrefix = `TCH${currentYear}`;
+
+        const lastTeacher = await Teacher.findOne({ regNo: new RegExp(`^${yearPrefix}`) }, 'regNo').sort({ regNo: -1 });
+        let nextNum = 1;
+        if (lastTeacher && lastTeacher.regNo) {
+            const numPart = lastTeacher.regNo.replace(yearPrefix, '');
+            const num = parseInt(numPart, 10);
+            if (!isNaN(num)) nextNum = num + 1;
+        }
+
+        let successCount = 0;
+        let failedCount = 0;
+        const errors = [];
+
+        const parseExcelDate = (dateVal) => {
+            if (!dateVal) return undefined;
+            if (dateVal instanceof Date) return dateVal;
+            if (typeof dateVal === 'number') return new Date((dateVal - (25567 + 2)) * 86400 * 1000);
+            if (typeof dateVal === 'string') {
+                const parts = dateVal.split('-');
+                if (parts.length === 3) return new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00Z`);
+            }
+            return new Date(dateVal);
+        };
+
+        const defaultPassword = 'teacher@123';
+
+        await Promise.all(teachers.map(async (t, i) => {
+            try {
+                const getValue = (keys) => {
+                    const match = keys.find(k => t[k] !== undefined);
+                    return match !== undefined ? t[match] : undefined;
+                };
+
+                const teacher = new Teacher({
+                    name: String(getValue(['name', 'NAME', 'Teacher Name', 'TEACHER NAME']) || '').trim(),
+                    email: String(getValue(['email', 'EMAIL', 'EMAIL ADDRESS', 'Email Address']) || '').toLowerCase().trim() || undefined,
+                    phone: String(getValue(['phone', 'PHONE', 'MOBILE NUMBER', 'Mobile']) || '').trim() || undefined,
+                    gender: String(getValue(['gender', 'GENDER']) || '').trim().replace(/^\w/, c => c.toUpperCase()), // capitalize first letter
+                    dob: parseExcelDate(getValue(['dob', 'DOB', 'DATE OF BIRTH', 'Date of Birth'])),
+                    department: String(getValue(['department', 'DEPARTMENT']) || '').trim(),
+                    designation: String(getValue(['designation', 'DESIGNATION']) || '').trim(),
+                    salary: Number(getValue(['salary', 'SALARY', 'MONTHLY SALARY'])) || 0,
+                    experience: String(getValue(['experience', 'EXPERIENCE']) || '').trim(),
+                    qualifications: String(getValue(['qualifications', 'QUALIFICATIONS']) || '').trim(),
+                    joiningDate: parseExcelDate(getValue(['joiningDate', 'JOINING DATE', 'Joining Date'])) || new Date(),
+                    regNo: `${yearPrefix}${String(nextNum + i).padStart(2, '0')}`,
+                    password: defaultPassword,
+                    status: 'active'
+                });
+
+                await teacher.save();
+                successCount++;
+            } catch (err) {
+                failedCount++;
+                errors.push({ name: t.name || 'Unknown', error: err.message });
+            }
+        }));
+
+        res.status(201).json({
+            message: `${successCount} teachers inserted, ${failedCount} failed.`,
+            total: teachers.length,
+            success: successCount,
+            failed: failedCount,
+            errors
+        });
     } catch (err) {
         res.status(500).json({ message: 'Server error', error: err.message });
     }

@@ -4,10 +4,10 @@ import { Eye, Pencil, Trash2, Banknote } from 'lucide-react';
 const Avatar = ({ src, name, size = 36, fontSize = '0.85rem', BASE, imgSrc }) => {
     const [err, setErr] = useState(false);
     if (src && !err) return <img src={imgSrc(src)} alt={name} onError={() => setErr(true)}
-        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />;
+        style={{ width: size, height: size, borderRadius: '2px', objectFit: 'cover', flexShrink: 0 }} />;
     return (
         <div style={{
-            width: size, height: size, borderRadius: '50%', background: 'var(--erp-primary)',
+            width: size, height: size, borderRadius: '2px', background: 'var(--erp-primary)',
             color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontWeight: 700, fontSize, flexShrink: 0
         }}>
@@ -16,7 +16,11 @@ const Avatar = ({ src, name, size = 36, fontSize = '0.85rem', BASE, imgSrc }) =>
     );
 };
 
-const TeacherTable = ({ teachers, loading, onView, onEdit, onDelete, onPayroll, fmt, imgSrc, BASE }) => {
+const TeacherTable = ({
+    teachers, loading, onView, onEdit, onDelete, onPayroll,
+    fmt, imgSrc, BASE
+}) => {
+
     return (
         <div className="erp-table-wrap">
             <table className="erp-table">
@@ -61,7 +65,7 @@ const TeacherTable = ({ teachers, loading, onView, onEdit, onDelete, onPayroll, 
                                 ) : <span className="td-sm">Not assigned</span>}
                             </td>
                             <td>
-                                <span className="td-bold" style={{ color: 'var(--erp-success)' }}>₹{fmt(t.salary)}</span>
+                                <span className="td-bold" style={{ color: 'var(--erp-teacher)' }}>₹{fmt(t.salary)}</span>
                                 <div className="td-sm">₹{fmt(t.salary * 12)} / year</div>
                             </td>
                             <td>
@@ -71,8 +75,10 @@ const TeacherTable = ({ teachers, loading, onView, onEdit, onDelete, onPayroll, 
                             </td>
                             <td>
                                 <div className="flex gap-2">
+                                   
+
                                     <button
-                                        className="btn btn-outline btn-sm !text-blue-600 border-blue-600 hover:bg-blue-600 hover:text-white"
+                                        className="btn btn-outline btn-sm !text-emerald-600 border-emerald-600 hover:bg-emerald-600 hover:text-white"
                                         onClick={() => onView(t)}
                                         title="View Profile"
                                     >
@@ -86,10 +92,10 @@ const TeacherTable = ({ teachers, loading, onView, onEdit, onDelete, onPayroll, 
                                     >
                                         <Pencil size={13} />
                                     </button>
-                                    <button
-                                        className="btn btn-outline btn-sm !text-green-600 border-green-600 hover:bg-green-600 hover:text-white"
+                                     <button
+                                        className="btn btn-outline btn-sm !text-emerald-600 border-emerald-600 hover:bg-emerald-600 hover:text-white"
                                         onClick={() => onPayroll(t)}
-                                        title="Configure Payroll & Leaves"
+                                        title="Generate Payroll"
                                     >
                                         <Banknote size={13} />
                                     </button>
@@ -106,7 +112,7 @@ const TeacherTable = ({ teachers, loading, onView, onEdit, onDelete, onPayroll, 
                     ))}
                 </tbody>
             </table>
-        </div>
+        </div >
     );
 };
 

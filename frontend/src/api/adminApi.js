@@ -15,6 +15,7 @@ const authHeader = () => ({
 
 export const getAdminProfile = () => API.get('/profile', authHeader());
 export const updateAdminProfile = (data) => API.put('/profile', data, authHeader());
+export const updateAdminSettings = (data) => API.put('/settings', data, authHeader());
 
 const DASH_API = axios.create({ baseURL: `${API_BASE_URL}/api` });
 

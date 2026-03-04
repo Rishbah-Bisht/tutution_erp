@@ -1,17 +1,19 @@
 import React from 'react';
-import { User, Eye, Pencil, Trash2, Loader2, Search } from 'lucide-react';
+import { User, Eye, Pencil, Loader2, Search, UserCheck, UserX } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const StudentTable = ({
     students,
     loading,
-    onViewProfile,
     onEdit,
-    onDelete,
+    onToggleStatus,
     page,
     setPage,
     totalPages,
     total
 }) => {
+    const navigate = useNavigate();
+
     if (loading && page === 1) {
         return (
             <div className="p-20 flex flex-col items-center gap-4 text-slate-400">
@@ -54,12 +56,12 @@ const StudentTable = ({
                     {students.map(s => (
                         <tr key={s._id} className="hover:bg-slate-50 transition-colors">
                             <td className="!pl-6">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 overflow-hidden border">
+                                <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate(`/students/${s._id}`)}>
+                                    <div className="w-10 h-10 rounded-sm bg-slate-100 flex items-center justify-center text-slate-400 overflow-hidden border">
                                         {s.profileImage ? <img src={s.profileImage} alt="" className="w-full h-full object-cover" /> : <User size={20} />}
                                     </div>
                                     <div>
-                                        <div className="font-bold text-slate-800">{s.name}</div>
+                                        <div className="font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">{s.name}</div>
                                         <div className="text-xs text-slate-400 font-medium">#{s.rollNo}</div>
                                     </div>
                                 </div>
@@ -71,18 +73,19 @@ const StudentTable = ({
                             <td>
                                 <div style={{ marginTop: 4 }}>
                                     <span style={{
-                                        padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 700,
-                                        background: s.status === 'active' ? '#dcfce7' : '#f1f5f9',
-                                        color: s.status === 'active' ? '#15803d' : '#64748b',
-                                        textTransform: 'uppercase'
+                                        padding: '2px 8px', borderRadius: '2px', fontSize: '10px', fontWeight: 800,
+                                        background: s.status === 'active' ? '#f0fff4' : s.status === 'batch_pending' ? '#fffbeb' : '#fef2f2',
+                                        color: s.status === 'active' ? '#16a34a' : s.status === 'batch_pending' ? '#d97706' : '#dc2626',
+                                        textTransform: 'uppercase',
+                                        border: s.status === 'active' ? '1px solid #bbf7d0' : s.status === 'batch_pending' ? '1px solid #fde68a' : '1px solid #fecaca'
                                     }}>
-                                        {s.status}
+                                        {s.status === 'batch_pending' ? 'Batch Pending' : s.status}
                                     </span>
                                 </div>
                             </td>
                             <td>
                                 <div className="text-sm font-bold text-slate-700">₹{(s.feesPaid || 0).toLocaleString()}</div>
-                                <div className="w-24 h-1 bg-slate-100 rounded-full mt-1.5 overflow-hidden">
+                                <div className="w-24 h-1.5 bg-slate-100 rounded-sm mt-1.5 overflow-hidden">
                                     <div className="h-full bg-blue-500" style={{ width: `${Math.min(100, ((s.feesPaid || 0) / (s.fees || 1)) * 100)}%` }}></div>
                                 </div>
                                 <div className="text-[10px] text-slate-400 mt-0.5">Total: ₹{(s.fees || 0).toLocaleString()}</div>
@@ -90,20 +93,22 @@ const StudentTable = ({
                             <td>
                                 <div className="flex items-center gap-2">
                                     <span className="text-sm font-medium">85%</span>
-                                    <div className="badge badge-success badge-xs"></div>
+                                    <div className="badge badge-primary badge-xs"></div>
                                 </div>
                             </td>
                             <td className="text-right !pr-6">
                                 <div className="flex justify-end gap-1">
-                                    <button className="btn btn-ghost btn-outline btn-sm !text-blue-600" title="View Profile" onClick={() => onViewProfile(s)}>
+                                    <button className="btn btn-ghost btn-outline btn-sm !text-blue-600" title="View Profile" onClick={() => navigate(`/students/${s._id}`)}>
                                         <Eye size={13} />
                                     </button>
 
                                     <button className="btn btn-ghost btn-outline btn-sm !text-slate-600" title="Edit" onClick={() => onEdit(s)}>
                                         <Pencil size={15} />
                                     </button>
-                                    <button className="btn btn-ghost btn-outline btn-sm !text-red-500 hover:bg-red-50" title="Delete" onClick={() => onDelete(s._id)}>
-                                        <Trash2 size={15} />
+                                    <button className={`btn btn-ghost btn-outline btn-sm ${s.status === 'active' ? '!text-rose-500 hover:bg-rose-50' : '!text-indigo-600 hover:bg-indigo-50'}`}
+                                        title={s.status === 'active' ? "Deactivate Student" : "Activate Student"}
+                                        onClick={() => onToggleStatus(s)}>
+                                        {s.status === 'active' ? <UserX size={15} /> : <UserCheck size={15} />}
                                     </button>
                                 </div>
                             </td>

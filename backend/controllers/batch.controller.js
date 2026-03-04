@@ -180,3 +180,27 @@ exports.exportBatches = async (req, res) => {
         res.status(500).json({ message: 'Server error', error: err.message });
     }
 };
+
+// GET /api/batches/:id
+exports.getBatchById = async (req, res) => {
+    try {
+        const batch = await Batch.findById(req.params.id).lean();
+        if (!batch) return res.status(404).json({ message: 'Batch not found' });
+
+        // Get student list and stats
+        const students = await Student.find({ batchId: batch._id, isDeleted: { $ne: true } })
+            .select('name rollNo feesPaid status profileImage')
+            .sort({ name: 1 })
+            .lean();
+
+        const stats = {
+            studentCount: students.length,
+            totalEarnings: students.reduce((sum, s) => sum + (s.feesPaid || 0), 0),
+            activeCount: students.filter(s => s.status === 'active').length
+        };
+
+        res.json({ batch: { ...batch, ...stats }, students });
+    } catch (err) {
+        res.status(500).json({ message: 'Server error', error: err.message });
+    }
+};

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import {
-    Plus, FileDown, Bell, GraduationCap, Search
+    Plus, FileDown, Bell, GraduationCap, Search, Trash2, Upload
 } from 'lucide-react';
 import ERPLayout from '../components/ERPLayout';
 import ToastContainer, { useToast } from '../components/Toast';
@@ -14,6 +14,7 @@ import TeacherFilters from '../components/teachers/TeacherFilters';
 import TeacherTable from '../components/teachers/TeacherTable';
 import TeacherProfileModal from '../components/teachers/TeacherProfileModal';
 import TeacherFormModal from '../components/teachers/TeacherFormModal';
+import TeacherBulkImportModal from '../components/teachers/TeacherBulkImportModal';
 import TeacherPayrollConfigModal from '../components/teachers/TeacherPayrollConfigModal';
 
 import { API_BASE_URL } from '../api/apiConfig';
@@ -49,11 +50,22 @@ const TeachersPage = () => {
     const [showForm, setShowForm] = useState(false);
     const [formMode, setFormMode] = useState('create');
     const [editTeacher, setEditTeacher] = useState(null);
-    const [payrollTeacher, setPayrollTeacher] = useState(null);
     const [showDel, setShowDel] = useState(false);
     const [delTeacher, setDelTeacher] = useState(null);
     const [delLoading, setDelLoading] = useState(false);
     const [delError, setDelError] = useState('');
+
+    // Operations
+    const [payrollTeacher, setPayrollTeacher] = useState(null);
+    const [bulkLoading, setBulkLoading] = useState(false);
+    const [bulkError, setBulkError] = useState('');
+
+    // Bulk Import state
+    const [showBulkModal, setShowBulkModal] = useState(false);
+    const [bulkFile, setBulkFile] = useState(null);
+    const [bulkResults, setBulkResults] = useState(null);
+    const [bulkSaving, setBulkSaving] = useState(false);
+    const [bulkImportErr, setBulkImportErr] = useState('');
 
     // Ctrl+K shortcut
     useEffect(() => {
@@ -211,8 +223,11 @@ const TeachersPage = () => {
                     <p style={{ fontSize: '0.95rem', color: '#64748b' }}>Manage instructors, academic assignments, and payroll configurations.</p>
                 </div>
                 <div style={{ display: 'flex', gap: 12 }}>
+                    <button className="btn btn-outline" style={{ height: 44, padding: '0 16px', borderRadius: 12 }} onClick={() => setShowBulkModal(true)}>
+                        <Upload size={18} /> Bulk Import
+                    </button>
                     <button className="btn btn-outline" style={{ height: 44, padding: '0 16px', borderRadius: 12 }} onClick={() => exportData('pdf')} title="Export PDF">
-                        <FileDown size={18} />
+                        <FileDown size={18} />Export PDF
                     </button>
                     <button className="btn btn-primary" style={{ height: 44, padding: '0 20px', borderRadius: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }} onClick={openCreate}>
                         <Plus size={18} /> Add New Faculty
@@ -297,22 +312,71 @@ const TeachersPage = () => {
                 )
             }
 
-            {
-                payrollTeacher && (
-                    <TeacherPayrollConfigModal
-                        teacher={payrollTeacher} onClose={() => setPayrollTeacher(null)}
-                        toast={toast} API={API}
-                    />
-                )
-            }
-
             <ActionModal
                 isOpen={showDel} onClose={() => setShowDel(false)}
                 onConfirm={confirmDelete} title="Confirm Deletion"
                 description={`Are you sure you want to delete ${delTeacher?.name}? This action requires your admin password.`}
                 actionType="delete" loading={delLoading} error={delError}
             />
-        </ERPLayout>
+
+
+            {payrollTeacher && (
+                <TeacherPayrollConfigModal
+                    teacher={payrollTeacher}
+                    onClose={() => setPayrollTeacher(null)}
+                    onSave={load}
+                    toast={toast}
+                    API={API}
+                />
+            )}
+
+            <TeacherBulkImportModal
+                isOpen={showBulkModal}
+                onClose={() => {
+                    setShowBulkModal(false);
+                    setBulkFile(null);
+                    setBulkImportErr('');
+                    setBulkResults(null);
+                }}
+                bulkFile={bulkFile}
+                setBulkFile={setBulkFile}
+                bulkResults={bulkResults}
+                setBulkResults={setBulkResults}
+                saving={bulkSaving}
+                onConfirm={async (pwd) => {
+                    // Requires admin password for bulk import
+                    if (!pwd) {
+                        toast.error('Admin password is required');
+                        return;
+                    }
+                    setBulkSaving(true);
+                    setBulkImportErr('');
+                    try {
+                        const { data } = await API().post('/teachers/bulk', { teachers: bulkFile, adminPassword: pwd });
+                        setBulkResults(data);
+                        toast.success(`${data.success} teachers imported!`);
+                        load();
+                        API().get('/teachers/summary').then(({ data }) => setSummary(data)).catch(() => { });
+
+                        if (data.failed === 0) {
+                            setTimeout(() => {
+                                setShowBulkModal(false);
+                                setBulkFile(null);
+                                setBulkResults(null);
+                            }, 1500);
+                        }
+                    } catch (e) {
+                        setBulkImportErr(e.response?.data?.message || 'Bulk import failed');
+                        toast.error('Bulk import failed');
+                    } finally {
+                        setBulkSaving(true); // Keep spinner if results shown? No, set false
+                        setBulkSaving(false);
+                    }
+                }}
+                err={bulkImportErr}
+                setErr={setBulkImportErr}
+            />
+        </ERPLayout >
     );
 };
 

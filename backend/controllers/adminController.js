@@ -17,7 +17,7 @@ exports.signup = async (req, res) => {
     try {
         const {
             adminName, coachingName, email, password, roomsAvailable,
-            registrationNumber, themeColors, classesOffered,
+            registrationNumber, classesOffered, phone, bio,
             instituteAddress, instituteEmail, institutePhone
         } = req.body;
 
@@ -37,9 +37,7 @@ exports.signup = async (req, res) => {
         }
 
         // Parse stringified arrays if sent from FormData
-        let parsedColors = ['#1b3a7a', '#c53030'];
         let parsedClasses = [];
-        try { if (themeColors) parsedColors = JSON.parse(themeColors); } catch (e) { }
         try { if (classesOffered) parsedClasses = JSON.parse(classesOffered); } catch (e) { }
 
         // 3. Create Admin
@@ -47,10 +45,11 @@ exports.signup = async (req, res) => {
             adminName,
             coachingName,
             email,
+            phone: phone || '',
+            bio: bio || '',
             password: hashedPassword,
             roomsAvailable,
             registrationNumber: registrationNumber || undefined,
-            themeColors: parsedColors,
             classesOffered: parsedClasses,
             instituteLogo,
             instituteAddress: instituteAddress || '',
@@ -126,14 +125,14 @@ exports.updateProfile = async (req, res) => {
         if (!admin) return res.status(404).json({ message: 'Admin not found' });
 
         const {
-            adminName, coachingName, email, phone, bio, currentPassword,
+            adminName, coachingName, email, phone, bio, adminPassword,
             roomsAvailable, registrationNumber, themeColors, classesOffered,
-            instituteAddress, instituteEmail, institutePhone
+            instituteAddress, instituteEmail, institutePhone, emailNotificationsEnabled
         } = req.body;
 
         // Verify password for sensitive changes
-        const valid = await bcrypt.compare(currentPassword, admin.password);
-        if (!valid) return res.status(401).json({ message: 'Incorrect current password' });
+        const valid = await bcrypt.compare(adminPassword, admin.password);
+        if (!valid) return res.status(401).json({ message: 'Incorrect password' });
 
         // Parse colors and classes
         let parsedColors = admin.themeColors;
@@ -157,6 +156,11 @@ exports.updateProfile = async (req, res) => {
         if (instituteEmail !== undefined) admin.instituteEmail = instituteEmail;
         if (institutePhone !== undefined) admin.institutePhone = institutePhone;
 
+        // Settings Toggle
+        if (emailNotificationsEnabled !== undefined) {
+            admin.emailNotificationsEnabled = emailNotificationsEnabled === 'true' || emailNotificationsEnabled === true;
+        }
+
         // Update Logo if provided
         if (req.file) {
             admin.instituteLogo = req.file.path;
@@ -170,6 +174,29 @@ exports.updateProfile = async (req, res) => {
 
         res.json({ message: 'Profile updated successfully', admin: updatedAdmin });
 
+    } catch (err) {
+        res.status(500).json({ message: 'Server error', error: err.message });
+    }
+};
+
+// Update Settings
+exports.updateSettings = async (req, res) => {
+    try {
+        const admin = await Admin.findById(req.admin.id);
+        if (!admin) return res.status(404).json({ message: 'Admin not found' });
+
+        const { emailNotificationsEnabled } = req.body;
+
+        if (emailNotificationsEnabled !== undefined) {
+            admin.emailNotificationsEnabled = emailNotificationsEnabled === 'true' || emailNotificationsEnabled === true;
+        }
+
+        await admin.save();
+
+        const updatedAdmin = admin.toObject();
+        delete updatedAdmin.password;
+
+        res.json({ message: 'Settings updated successfully', admin: updatedAdmin });
     } catch (err) {
         res.status(500).json({ message: 'Server error', error: err.message });
     }

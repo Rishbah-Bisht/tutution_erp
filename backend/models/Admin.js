@@ -50,10 +50,6 @@ const adminSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
-    themeColors: {
-        type: [String],
-        default: ['#1b3a7a', '#c53030'] // Primary, Secondary defaults
-    },
     classesOffered: {
         type: [String],
         default: []
@@ -66,6 +62,10 @@ const adminSchema = new mongoose.Schema({
     roomsAvailable: {
         type: Number,
         required: [true, 'Number of rooms is required']
+    },
+    emailNotificationsEnabled: {
+        type: Boolean,
+        default: true
     },
     createdAt: {
         type: Date,

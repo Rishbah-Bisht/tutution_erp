@@ -10,6 +10,8 @@ import ERPLayout from '../components/ERPLayout';
 import ToastContainer, { useToast } from '../components/Toast';
 import ActionModal from '../components/common/ActionModal';
 import AlertMessage from '../components/common/AlertMessage';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // ── API helper ───────────────────────────────────────────────
 import { API_BASE_URL } from '../api/apiConfig';
@@ -131,6 +133,7 @@ const TimetableGrid = ({ days, timeSlots, classroom, occupancy, selected, onTogg
 // Batch Row
 // ══════════════════════════════════════════════════════════════
 const BatchRow = ({ batch, onEdit, onDelete }) => {
+    const navigate = useNavigate();
     const schedDays = [...new Set((batch.schedule || []).map(s => s.day.slice(0, 3)))].join(', ');
 
     return (
@@ -178,6 +181,9 @@ const BatchRow = ({ batch, onEdit, onDelete }) => {
             </td>
             <td>
                 <div className="flex gap-2">
+                    <button className="btn btn-outline btn-sm" onClick={() => navigate(`/batches/${batch._id}`)} title="View batch details">
+                        <Eye size={13} />
+                    </button>
                     <button className="btn btn-outline btn-sm" onClick={() => onEdit(batch)} title="Edit batch">
                         <Pencil size={13} />
                     </button>
@@ -444,36 +450,40 @@ const BatchesPage = () => {
             toast.error('No records to export');
             return;
         }
-        const csvRows = [];
-        const headers = ['Batch Name', 'Course', 'Subjects', 'Schedule', 'Student Count', 'Capacity', 'Earnings', 'Fees/Student', 'Status'];
-        csvRows.push(headers.join(','));
 
-        batches.forEach(b => {
-            const name = b.name || '';
-            const course = b.course || '';
-            const subjects = (b.subjects || []).join('; ') || 'N/A';
-            const schedule = [...new Set((b.schedule || []).map(s => s.day.slice(0, 3)))].join('; ') || 'N/A';
-            const studentCount = b.studentCount || 0;
-            const capacity = b.capacity || '';
-            const earnings = b.earnings || 0;
-            const fees = b.fees || 0;
-            const status = b.isActive ? 'Active' : 'Inactive';
+        const doc = new jsPDF();
 
-            csvRows.push([
-                `"${name}"`, `"${course}"`, `"${subjects}"`, `"${schedule}"`, studentCount, capacity, earnings, fees, `"${status}"`
-            ].join(','));
+        // Header
+        doc.setFontSize(22);
+        doc.setTextColor(15, 23, 42); // slate-900
+        doc.text('Academic Batches Report', 14, 22);
+
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 28);
+        doc.text(`Total Batches: ${total}`, 14, 33);
+
+        const tableBody = batches.map(b => [
+            b.name || '—',
+            b.course || '—',
+            (b.subjects || []).join(', ') || '—',
+            `${b.studentCount || 0} / ${b.capacity || '—'}`,
+            `INR ${(b.earnings || 0).toLocaleString('en-IN')}`,
+            b.isActive ? 'Active' : 'Inactive'
+        ]);
+
+        autoTable(doc, {
+            startY: 40,
+            head: [['Batch Name', 'Course', 'Subjects', 'Enrollment', 'Revenue', 'Status']],
+            body: tableBody,
+            headStyles: { fillColor: [15, 23, 42], fontSize: 9, fontStyle: 'bold' },
+            styles: { fontSize: 8, cellPadding: 4 },
+            alternateRowStyles: { fillColor: [248, 250, 252] }, // slate-50
+            margin: { top: 40 }
         });
 
-        const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.setAttribute('hidden', '');
-        a.setAttribute('href', url);
-        a.setAttribute('download', `Batches_Export_${new Date().toISOString().slice(0, 10)}.csv`);
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        toast.success('CSV exported!');
+        doc.save(`Batches_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
+        toast.success('PDF report exported! 📄');
     };
 
     // ═══════════════════════════════════════════════════════════
@@ -490,8 +500,8 @@ const BatchesPage = () => {
                     <p>{total} batch{total !== 1 ? 'es' : ''} configured</p>
                 </div>
                 <div className="flex gap-2">
-                    <button className="btn btn-outline" onClick={exportData} title="Export CSV">
-                        <FileDown size={14} /> Export CSV
+                    <button className="btn btn-outline" onClick={exportData} title="Export PDF">
+                        <FileDown size={14} /> Export PDF
                     </button>
                     <button className="btn btn-outline" onClick={loadBatches} title="Refresh">
                         <RefreshCw size={14} className={loading ? 'spin' : ''} />
@@ -580,200 +590,234 @@ const BatchesPage = () => {
             ═══════════════════════════════════════════════ */}
             {
                 showModal && (
-                    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && closeModal()}>
+                    <div className="modal-overlay" style={{
+                        position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.7)',
+                        backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex',
+                        alignItems: 'center', justifyContent: 'center', padding: '20px'
+                    }} onClick={e => e.target === e.currentTarget && closeModal()}>
+
+                        <style>{`
+        .erp-input:focus { border-color: #0f172a !important; box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.1) !important; outline: none; }
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      `}</style>
+
                         <div className="modal" style={{
                             maxWidth: 820,
-                            width: '95vw',
-                            maxHeight: '90vh',
+                            width: '100%',
+                            maxHeight: '92vh',
                             display: 'flex',
                             flexDirection: 'column',
                             overflow: 'hidden',
-                            borderRadius: '24px',
+                            borderRadius: '10px',
                             border: 'none',
-                            background: '#fff'
+                            background: '#fff',
+                            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)'
                         }}>
-                            {/* --- PREMIUM BATCH FORM HEADER --- */}
-                            <div style={{
-                                padding: '32px 24px',
-                                background: 'linear-gradient(135deg, #312e81 0%, #4338ca 100%)',
+
+                            {/* --- PREMIUM BATCH FORM HEADER (Dark Theme like Image) --- */}
+                            <header style={{
+                                padding: '24px 32px',
+                                background: '#0f172a',
                                 position: 'relative',
                                 color: '#fff',
-                                overflow: 'hidden'
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                flexShrink: 0
                             }}>
-                                <BookOpen size={120} style={{ position: 'absolute', right: -10, bottom: -20, opacity: 0.1, color: '#fff' }} />
+                                <BookOpen size={120} style={{ position: 'absolute', right: -10, bottom: -30, opacity: 0.05 }} />
 
-                                <button type="button" onClick={closeModal} style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', color: '#fff', padding: 6, cursor: 'pointer' }}>
-                                    <X size={18} />
-                                </button>
-
-                                <div style={{ position: 'relative', zIndex: 1 }}>
-                                    <h2 style={{ fontSize: '1.5rem', fontWeight: 900, margin: 0, letterSpacing: '-0.02em' }}>
-                                        {modalMode === 'edit' ? 'Update Academic Batch' : 'Create New Batch'}
-                                    </h2>
-                                    <p style={{ fontSize: '0.9rem', opacity: 0.9, marginTop: 4, fontWeight: 500 }}>
-                                        {modalMode === 'edit' ? `Modifying configuration for ${editingBatch?.name}` : 'Setup a new teaching group and timetable'}
-                                    </p>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 20, position: 'relative', zIndex: 1 }}>
+                                    <div style={{ width: 56, height: 56, background: 'rgba(255,255,255,0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(255,255,255,0.2)' }}>
+                                        <BookOpen size={28} />
+                                    </div>
+                                    <div>
+                                        <h2 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0 }}>
+                                            {modalMode === 'edit' ? 'Update Academic Batch' : 'Create New Batch'}
+                                        </h2>
+                                        <p style={{ margin: 0, opacity: 0.8, fontSize: '0.9rem' }}>
+                                            {modalMode === 'edit' ? `Modifying configuration for ${editingBatch?.name}` : 'Setup a new teaching group and timetable'}
+                                        </p>
+                                    </div>
                                 </div>
-                            </div>
+
+                                <button type="button" onClick={closeModal} style={{
+                                    background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)',
+                                    borderRadius: '8px', color: '#fff', padding: '10px 20px', cursor: 'pointer',
+                                    fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem',
+                                    position: 'relative', zIndex: 1
+                                }}>
+                                    <X size={18} /> CLOSE
+                                </button>
+                            </header>
 
                             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                                <div className="modal-body" style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+                                <div className="modal-body" style={{ flex: 1, overflowY: 'auto', padding: '32px' }}>
 
-                                    {/* ── Basic Info ────────────────────── */}
-                                    <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#4338ca', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+                                    {/* ── Basic Info Section ── */}
+                                    <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
                                         Basic Information
-                                        <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }}></div>
+                                        <div style={{ flex: 1, height: '1px', background: '#f1f5f9' }}></div>
                                     </div>
-                                    <div className="mf-row">
-                                        <div className="mf">
-                                            <label>Batch Name *</label>
-                                            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                                                placeholder="e.g.SCI-11-26" required />
+
+                                    <div style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
+                                        <div style={{ flex: 1 }}>
+                                            <label style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Batch Name *</label>
+                                            <input
+                                                style={{ width: '100%', padding: '12px 16px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', marginTop: 6 }}
+                                                className="erp-input"
+                                                value={form.name}
+                                                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                                                placeholder="e.g. SCI-11-26" required
+                                            />
                                         </div>
-                                        <div className="mf">
-                                            <label>Class / Course</label>
-                                            <select value={form.course} onChange={e => setForm(f => ({ ...f, course: e.target.value, subjects: [] }))}>
+                                        <div style={{ flex: 1 }}>
+                                            <label style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Class / Course</label>
+                                            <select
+                                                style={{ width: '100%', padding: '12px 16px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', marginTop: 6, background: '#fff' }}
+                                                className="erp-input"
+                                                value={form.course}
+                                                onChange={e => setForm(f => ({ ...f, course: e.target.value, subjects: [] }))}
+                                            >
                                                 <option value="">Select course…</option>
                                                 {getDynamicClasses().map(c => <option key={c} value={c}>{c}</option>)}
                                             </select>
                                         </div>
                                     </div>
-                                    <div className="mf-row">
-                                        <div className="mf">
-                                            <label>Fees per Student (₹ / Month)</label>
-                                            <input type="number" value={form.fees}
-                                                onChange={e => setForm(f => ({ ...f, fees: e.target.value }))} placeholder="0" min="0" />
-                                        </div>
-                                        <div className="mf">
-                                            <label>Capacity</label>
-                                            <input type="number" value={form.capacity}
-                                                onChange={e => setForm(f => ({ ...f, capacity: e.target.value }))} placeholder="30" min="1" />
-                                        </div>
-                                    </div>
 
-                                    <div className="mf-row">
-                                        <div className="mf">
-                                            <label>Batch Start Date</label>
-                                            <div style={{ position: 'relative' }}>
-                                                <input type="date" value={form.startDate}
-                                                    onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} />
-                                            </div>
-                                            <p className="td-sm" style={{ marginTop: 4 }}>Date when fee generation begins</p>
+                                    <div style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
+                                        <div style={{ flex: 1 }}>
+                                            <label style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Fees (₹ / Month)</label>
+                                            <input
+                                                type="number"
+                                                style={{ width: '100%', padding: '12px 16px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', marginTop: 6 }}
+                                                className="erp-input"
+                                                value={form.fees}
+                                                onChange={e => setForm(f => ({ ...f, fees: e.target.value }))}
+                                                placeholder="0" min="0"
+                                            />
                                         </div>
-                                        <div className="mf">
-                                            <label>Batch End Date</label>
-                                            <div style={{ position: 'relative' }}>
-                                                <input type="date" value={form.endDate}
-                                                    onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} />
-                                            </div>
-                                            <p className="td-sm" style={{ marginTop: 4 }}>Date when fee generation stops</p>
+                                        <div style={{ flex: 1 }}>
+                                            <label style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Capacity</label>
+                                            <input
+                                                type="number"
+                                                style={{ width: '100%', padding: '12px 16px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', marginTop: 6 }}
+                                                className="erp-input"
+                                                value={form.capacity}
+                                                onChange={e => setForm(f => ({ ...f, capacity: e.target.value }))}
+                                                placeholder="30" min="1"
+                                            />
                                         </div>
                                     </div>
 
+                                    <div style={{ display: 'flex', gap: 20, marginBottom: 30 }}>
+                                        <div style={{ flex: 1 }}>
+                                            <label style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Batch Start Date</label>
+                                            <input
+                                                type="date"
+                                                style={{ width: '100%', padding: '12px 16px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', marginTop: 6 }}
+                                                className="erp-input"
+                                                value={form.startDate}
+                                                onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))}
+                                            />
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <label style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Batch End Date</label>
+                                            <input
+                                                type="date"
+                                                style={{ width: '100%', padding: '12px 16px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', marginTop: 6 }}
+                                                className="erp-input"
+                                                value={form.endDate}
+                                                onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))}
+                                            />
+                                        </div>
+                                    </div>
 
-                                    <hr className="divider" />
-
-                                    {/* ── Subject Selection ──────────────── */}
-                                    <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#4338ca', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+                                    {/* ── Subject Selection ── */}
+                                    <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
                                         Subject Assignment
-                                        <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }}></div>
+                                        <div style={{ flex: 1, height: '1px', background: '#f1f5f9' }}></div>
                                     </div>
-                                    {!form.course ? (
-                                        <div style={{ fontSize: '0.84rem', color: 'var(--erp-muted2)', padding: '12px 0', background: 'var(--erp-bg2)', borderRadius: 8, textAlign: 'center', marginBottom: 14 }}>
-                                            Select a course above to load available subjects
-                                        </div>
-                                    ) : subjLoading ? (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--erp-muted2)', fontSize: '0.84rem', marginBottom: 14 }}>
-                                            <Loader2 size={15} className="spin" /> Loading subjects…
-                                        </div>
-                                    ) : subjects.length === 0 ? (
-                                        <div style={{ fontSize: '0.84rem', color: 'var(--erp-muted2)', marginBottom: 14 }}>No subjects found for this course.</div>
-                                    ) : (
-                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-                                            {subjects.map(sub => {
-                                                const checked = form.subjects.includes(sub);
-                                                return (
-                                                    <button key={sub} type="button" onClick={() => toggleSubject(sub)}
-                                                        style={{
-                                                            padding: '6px 14px', borderRadius: 20, fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.16s',
-                                                            background: checked ? 'var(--erp-primary)' : 'var(--erp-input-bg)',
-                                                            color: checked ? '#fff' : 'var(--erp-text2)',
-                                                            border: `1.5px solid ${checked ? 'var(--erp-primary)' : 'var(--erp-border)'}`,
-                                                        }}>
-                                                        {checked && <CheckCircle2 size={12} style={{ marginRight: 5, verticalAlign: 'middle' }} />}
-                                                        {sub}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
 
-                                    <hr className="divider" />
+                                    <div style={{ marginBottom: 30 }}>
+                                        {!form.course ? (
+                                            <div style={{ fontSize: '0.85rem', color: '#94a3b8', padding: '16px', background: '#f8fafc', borderRadius: 8, textAlign: 'center' }}>
+                                                Select a course above to load available subjects
+                                            </div>
+                                        ) : subjLoading ? (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#64748b', fontSize: '0.85rem' }}>
+                                                <Loader2 size={16} className="spin" /> Loading subjects…
+                                            </div>
+                                        ) : (
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                                                {subjects.map(sub => {
+                                                    const checked = form.subjects.includes(sub);
+                                                    return (
+                                                        <button key={sub} type="button" onClick={() => toggleSubject(sub)}
+                                                            style={{
+                                                                padding: '8px 16px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', transition: '0.2s',
+                                                                background: checked ? '#0f172a' : '#fff',
+                                                                color: checked ? '#fff' : '#475569',
+                                                                border: `1.5px solid ${checked ? '#0f172a' : '#cbd5e1'}`,
+                                                            }}>
+                                                            {sub}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
 
-                                    {/* ── Classroom & Timetable ──────────── */}
-                                    <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#4338ca', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+                                    {/* ── Timetable Section ── */}
+                                    <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
                                         Classroom & Timetable
-                                        <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }}></div>
+                                        <div style={{ flex: 1, height: '1px', background: '#f1f5f9' }}></div>
                                     </div>
-                                    <div className="mf" style={{ maxWidth: 260 }}>
-                                        <label>Classroom</label>
-                                        <select value={form.classroom} onChange={e => setForm(f => ({ ...f, classroom: e.target.value, schedule: [] }))}>
+
+                                    <div style={{ maxWidth: 300, marginBottom: 20 }}>
+                                        <label style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Select Classroom</label>
+                                        <select
+                                            style={{ width: '100%', padding: '12px 16px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', marginTop: 6, background: '#fff' }}
+                                            className="erp-input"
+                                            value={form.classroom}
+                                            onChange={e => setForm(f => ({ ...f, classroom: e.target.value, schedule: [] }))}
+                                        >
                                             <option value="">Select classroom…</option>
                                             {config.classrooms.map(r => <option key={r} value={r}>{r}</option>)}
                                         </select>
                                     </div>
 
-                                    {form.classroom ? (
-                                        occLoading ? (
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--erp-muted2)', fontSize: '0.84rem', padding: '12px 0' }}>
-                                                <Loader2 size={15} className="spin" /> Checking room occupancy…
+                                    {form.classroom && (
+                                        <div style={{ animation: 'fadeIn 0.3s ease' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                                                <p style={{ fontSize: '0.85rem', color: '#64748b', margin: 0 }}>
+                                                    Click slots to schedule — <strong>{form.schedule.length}</strong> selected
+                                                </p>
+                                                <button type="button" onClick={handleAutoSchedule} disabled={isAutoScheduling}
+                                                    style={{ padding: '8px 16px', background: '#0f172a', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                    {isAutoScheduling ? <Loader2 size={14} className="spin" /> : '✨ AUTO-SCHEDULE'}
+                                                </button>
                                             </div>
-                                        ) : (
-                                            <div>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                                                    <p style={{ fontSize: '0.82rem', color: 'var(--erp-muted2)' }}>
-                                                        Click slots to schedule — <strong>{form.schedule.length}</strong> slot{form.schedule.length !== 1 ? 's' : ''} selected
-                                                    </p>
-                                                    <div style={{ display: 'flex', gap: 8 }}>
-                                                        <button type="button" className="btn btn-primary btn-sm"
-                                                            style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)', border: 'none' }}
-                                                            onClick={handleAutoSchedule} disabled={isAutoScheduling}>
-                                                            {isAutoScheduling ? <><Loader2 size={13} className="spin" style={{ marginRight: 5 }} /> Generating…</> : '✨ Auto-Schedule (AI)'}
-                                                        </button>
-                                                        {form.schedule.length > 0 && (
-                                                            <button type="button" className="btn btn-outline btn-sm"
-                                                                onClick={() => setForm(f => ({ ...f, schedule: [] }))}>
-                                                                Clear slots
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                {config.days?.length > 0 && config.timeSlots?.length > 0 ? (
-                                                    <TimetableGrid
-                                                        days={config.days}
-                                                        timeSlots={config.timeSlots}
-                                                        classroom={form.classroom}
-                                                        occupancy={occupancy}
-                                                        selected={form.schedule}
-                                                        onToggle={toggleSlot}
-                                                    />
-                                                ) : (
-                                                    <div className="empty"><p>Scheduler config not loaded.</p></div>
-                                                )}
-                                            </div>
-                                        )
-                                    ) : (
-                                        <div style={{ background: 'var(--erp-bg2)', borderRadius: 8, padding: 16, textAlign: 'center', color: 'var(--erp-muted2)', fontSize: '0.84rem' }}>
-                                            <Calendar size={24} style={{ margin: '0 auto 8px', display: 'block', opacity: 0.4 }} />
-                                            Select a classroom to configure the timetable
+                                            <TimetableGrid
+                                                days={config.days}
+                                                timeSlots={config.timeSlots}
+                                                classroom={form.classroom}
+                                                occupancy={occupancy}
+                                                selected={form.schedule}
+                                                onToggle={toggleSlot}
+                                            />
                                         </div>
                                     )}
                                 </div>
 
-                                <div className="modal-footer" style={{ borderTop: '1px solid #e2e8f0', padding: '16px 24px', display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-                                    <button type="button" className="btn" style={{ padding: '12px 24px', borderRadius: '12px', border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontWeight: 700, cursor: 'pointer' }} onClick={closeModal}>Cancel</button>
-                                    <button type="submit" className="btn" style={{ padding: '12px 32px', background: '#312e81', color: '#fff', borderRadius: '12px', fontWeight: 700, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }} disabled={formSaving}>
-                                        {formSaving ? <><Loader2 size={16} className="spin" /> Saving…</> : modalMode === 'edit' ? 'Update Batch' : 'Create Batch'}
+                                {/* --- FOOTER (Like Image) --- */}
+                                <div style={{ padding: '24px 32px', borderTop: '1px solid #f1f5f9', display: 'flex', gap: 16, background: '#fff' }}>
+                                    <button type="button" onClick={closeModal} style={{ padding: '0 40px', height: 52, borderRadius: '8px', border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontWeight: 800, cursor: 'pointer', fontSize: '0.9rem' }}>
+                                        CANCEL
+                                    </button>
+                                    <button type="submit" disabled={formSaving} style={{ flex: 1, height: 52, background: '#0f172a', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, fontSize: '0.9rem', letterSpacing: '0.05em' }}>
+                                        {formSaving ? <Loader2 className="spin" /> : (modalMode === 'edit' ? <>UPDATE ACADEMIC BATCH <ShieldAlert size={20} /></> : <>COMPLETE BATCH CREATION <Plus size={20} /></>)}
                                     </button>
                                 </div>
                             </form>

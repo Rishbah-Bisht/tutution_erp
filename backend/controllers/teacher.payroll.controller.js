@@ -8,6 +8,8 @@ const {
 } = require('../models/TeacherPayroll');
 const Teacher = require('../models/Teacher');
 const Admin = require('../models/Admin');
+const Expense = require('../models/Expense');
+const { queueNotification } = require('../services/emailService');
 
 
 // ==========================================
@@ -134,20 +136,12 @@ const calculateSalaryForTeacher = async (teacherId, monthYear) => {
     const extraClasses = await TeacherExtraClass.find({ teacherId, monthRecord: monthYear });
     const extraClassesAmount = extraClasses.reduce((sum, record) => sum + record.amount, 0);
 
-    // 2. Calculate Leaves
-    const leaves = await TeacherLeave.find({ teacherId, monthRecord: monthYear });
-    let totalLeaveDays = leaves.reduce((sum, leave) => sum + (leave.isHalfDay ? 0.5 : 1), 0);
-
-    // Leave Deduction = (Base / 30) * Leave Days
-    const dailyRate = baseSalary / 30;
-    const leaveDeductions = Math.round(dailyRate * totalLeaveDays);
-
-    // 3. Calculate Bonuses
+    // 2. Calculate Bonus
     const bonuses = await TeacherBonus.find({ teacherId, monthRecord: monthYear });
-    const bonusAmount = bonuses.reduce((sum, bonus) => sum + bonus.amount, 0);
+    const bonusAmount = bonuses.reduce((sum, record) => sum + record.amount, 0);
 
-    // Net = Base + Extra + Bonus - Leaves
-    let netSalary = baseSalary + extraClassesAmount + bonusAmount - leaveDeductions;
+    // Net = Base + Extra + Bonus
+    let netSalary = baseSalary + extraClassesAmount + bonusAmount;
     if (netSalary < 0) netSalary = 0;
 
     return {
@@ -155,7 +149,7 @@ const calculateSalaryForTeacher = async (teacherId, monthYear) => {
         monthYear,
         baseSalary,
         extraClassesAmount,
-        leaveDeductions,
+        leaveDeductions: 0,
         advanceDeductions: 0,
         bonusAmount,
         netSalary,
@@ -205,23 +199,34 @@ exports.markSalaryPaid = async (req, res) => {
         const salary = await TeacherSalary.findById(salaryRecordId);
         if (!salary) return res.status(404).json({ message: 'Salary record not found' });
 
-        if (salary.status === 'Paid') return res.status(400).json({ message: 'Salary already marked as paid' });
+        if (salary.status === 'Paid') return res.status(400).json({ message: 'Salary already fully paid' });
+
+        // Calculate current total paid for this record
+        const previousPayments = await TeacherPayment.find({ salaryRecordId });
+        const totalPreviousPaid = previousPayments.reduce((sum, p) => sum + p.paidAmount, 0);
+
+        const newTotalPaid = totalPreviousPaid + Number(paidAmount);
 
         const payment = new TeacherPayment({
             salaryRecordId,
             teacherId: salary.teacherId,
-            paidAmount,
+            paidAmount: Number(paidAmount),
             paymentMethod,
             transactionId: transactionId || `PAY-${salary.monthYear.replace('-', '')}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
             notes
         });
         await payment.save();
 
-        // Update salary record status and synchronized fields
-        salary.status = 'Paid';
+        // Update salary record status based on total paid
+        if (newTotalPaid >= salary.netSalary) {
+            salary.status = 'Paid';
+        } else {
+            salary.status = 'Processing';
+        }
+
         salary.paymentMethod = paymentMethod;
-        salary.transactionId = payment.transactionId; // Use the generated/provided ID from payment doc
-        salary.paymentDate = new Date(); // Use server date
+        salary.transactionId = payment.transactionId;
+        salary.paymentDate = new Date();
         salary.notes = notes;
 
         // Capture UPI ID used if applicable
@@ -231,6 +236,51 @@ exports.markSalaryPaid = async (req, res) => {
         }
 
         await salary.save();
+
+        // ---------------------------------------------------------
+        // AUTO-CREATE EXPENSE RECORD
+        // ---------------------------------------------------------
+        try {
+            const teacher = await Teacher.findById(salary.teacherId).select('name');
+            const modeMapping = {
+                'Bank Transfer': 'Bank Transfer',
+                'UPI': 'UPI',
+                'Cash': 'Cash'
+            };
+
+            await Expense.create({
+                title: `Salary Payout - ${teacher?.name || 'Faculty'} (${salary.monthYear})`,
+                amount: paidAmount,
+                category: 'Salary',
+                paymentMode: modeMapping[paymentMethod] || 'Cash',
+                date: new Date(),
+                description: `Salary disbursement for ${salary.monthYear}. Ref: ${payment.transactionId}. ${notes || ''}`,
+                status: 'Paid'
+            });
+        } catch (expErr) {
+            console.error('[PayrollToExpense] Failed to create expense record:', expErr);
+        }
+
+        // Email Notification: Salary Paid
+        try {
+            const teacherInfo = await Teacher.findById(salary.teacherId).select('name email');
+            if (teacherInfo && teacherInfo.email) {
+                queueNotification({
+                    recipientEmail: teacherInfo.email,
+                    recipientName: teacherInfo.name,
+                    subject: `Salary Credited — ${salary.monthYear}`,
+                    type: 'salary_paid',
+                    data: {
+                        monthYear: salary.monthYear,
+                        amountPaid: paidAmount,
+                        paymentMethod,
+                        transactionId: payment.transactionId
+                    }
+                }).catch(e => console.error('[SalaryEmail] Error:', e));
+            }
+        } catch (emailErr) {
+            console.error('[SalaryEmail] Lookup error:', emailErr);
+        }
 
         res.json({ message: 'Payment recorded successfully', payment });
     } catch (error) {
@@ -243,31 +293,35 @@ exports.markSalaryPaid = async (req, res) => {
 // ==========================================
 exports.getPayrollDashboardStats = async (req, res) => {
     try {
-        const currentMonth = new Date().toISOString().slice(0, 7); // e.g. "2023-10"
+        const { monthYear } = req.query;
+        const targetMonth = monthYear || new Date().toISOString().slice(0, 7);
 
         const totalTeachers = await Teacher.countDocuments({ status: 'active' });
         const activeProfiles = await TeacherSalaryProfile.countDocuments({ status: 'Active' });
 
-        // Salaries for current month
-        const currentMonthSalaries = await TeacherSalary.find({ monthYear: currentMonth });
+        // Salaries for target month
+        const targetMonthSalaries = await TeacherSalary.find({ monthYear: targetMonth });
 
         let totalLiability = 0;
-        let totalPaid = 0;
-        let totalPending = 0;
-
-        currentMonthSalaries.forEach(s => {
+        targetMonthSalaries.forEach(s => {
             totalLiability += s.netSalary;
-            if (s.status === 'Paid') {
-                totalPaid += s.netSalary;
-            } else {
-                totalPending += s.netSalary;
-            }
         });
+
+        // Sum individual payments for these salaries
+        const salaryIds = targetMonthSalaries.map(s => s._id);
+        const allPayments = await TeacherPayment.find({ salaryRecordId: { $in: salaryIds } });
+
+        let totalPaid = 0;
+        allPayments.forEach(p => {
+            totalPaid += p.paidAmount;
+        });
+
+        const totalPending = totalLiability - totalPaid;
 
         res.json({
             totalTeachers,
             teachersWithProfiles: activeProfiles,
-            currentMonth,
+            monthYear: targetMonth,
             totalLiability,
             totalPaid,
             totalPending
@@ -285,12 +339,60 @@ exports.getAllSalaries = async (req, res) => {
         const query = {};
         if (monthYear) query.monthYear = monthYear;
         if (teacherId) query.teacherId = teacherId;
+
         const salaries = await TeacherSalary.find(query)
             .populate('teacherId', 'name email profileImage regNo department')
             .sort({ createdAt: -1 });
 
-        res.json(salaries);
+        const salaryIds = salaries.map(s => s._id);
+        const allPayments = await TeacherPayment.find({ salaryRecordId: { $in: salaryIds } });
+
+        const salariesWithPaid = salaries.map(s => {
+            const payments = allPayments.filter(p => p.salaryRecordId.toString() === s._id.toString());
+            const totalPaid = payments.reduce((sum, p) => sum + p.paidAmount, 0);
+            return {
+                ...s.toObject(),
+                totalPaid
+            };
+        });
+
+        res.json(salariesWithPaid);
     } catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+// 6. BULK OPERATIONS
+
+exports.bulkGenerateSalaries = async (req, res) => {
+    try {
+        const { ids, monthYear } = req.body;
+        if (!ids || !ids.length) return res.status(400).json({ message: 'No teacher IDs provided' });
+        if (!monthYear) return res.status(400).json({ message: 'monthYear is required' });
+
+        let generatedCount = 0;
+        let skippedCount = 0;
+
+        for (const teacherId of ids) {
+            // Check if already generated for this month
+            const existing = await TeacherSalary.findOne({ teacherId, monthYear });
+            if (existing) {
+                skippedCount++;
+                continue;
+            }
+
+            const salaryData = await calculateSalaryForTeacher(teacherId, monthYear);
+            if (salaryData) {
+                const newSalary = new TeacherSalary(salaryData);
+                await newSalary.save();
+                generatedCount++;
+            }
+        }
+
+        res.json({
+            message: `Successfully generated ${generatedCount} salary records for ${monthYear}.`,
+            details: { generated: generatedCount, skipped: skippedCount }
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error during bulk generation', error: error.message });
     }
 };

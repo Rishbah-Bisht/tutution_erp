@@ -6,8 +6,10 @@ const upload = require('../middleware/upload');
 
 router.get('/', ctrl.getAllTeachers);
 router.get('/summary', ctrl.getSummary);
+router.post('/bulk', verifyPwd, ctrl.bulkUpload);
 
 router.post('/', upload.single('profileImage'), ctrl.createTeacher);
+router.put('/bulk-update', verifyPwd, ctrl.bulkUpdate);
 router.put('/:id', upload.single('profileImage'), verifyPwd, ctrl.updateTeacher);
 router.delete('/:id', verifyPwd, ctrl.deleteTeacher);
 

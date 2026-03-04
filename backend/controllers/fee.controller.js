@@ -3,6 +3,7 @@ const Student = require('../models/Student');
 const Batch = require('../models/Batch');
 const AuditLog = require('../models/AuditLog');
 const crypto = require('crypto');
+const { queueNotification } = require('../services/emailService');
 
 // GET /api/fees — all fees with optional filters
 exports.getAllFees = async (req, res) => {
@@ -52,32 +53,37 @@ exports.getMetrics = async (req, res) => {
         const currentMonth = now.toLocaleString('default', { month: 'long' });
         const currentYear = now.getFullYear();
 
-        const [totals, studentCount, pendingFeeStudents, fullyPaidStudents] = await Promise.all([
+        const [totals, studentCount, pendingFeeStudents] = await Promise.all([
             Fee.aggregate([
+                { $match: { isDeleted: { $ne: true } } },
                 {
                     $group: {
                         _id: '$status',
-                        billed: { $sum: '$totalFee' }, // updated from explicit calculation
+                        billed: { $sum: '$totalFee' },
                         paid: { $sum: '$amountPaid' },
-                        pending: { $sum: '$pendingAmount' }, // updated from subtraction
+                        pending: { $sum: '$pendingAmount' },
                         count: { $sum: 1 }
                     }
                 }
             ]),
             Student.countDocuments({ status: 'active' }),
-            Fee.distinct('studentId', { status: { $in: ['pending', 'partial', 'overdue'] } }),
-            Fee.distinct('studentId', { status: 'paid', month: currentMonth, year: currentYear })
+            // Only count pending students who are still ACTIVE in the system
+            (async () => {
+                const pendingIds = await Fee.distinct('studentId', { status: { $in: ['pending', 'partial', 'overdue'] }, isDeleted: { $ne: true } });
+                const activePending = await Student.find({ _id: { $in: pendingIds }, status: 'active' }).distinct('_id');
+                return activePending;
+            })()
         ]);
 
-        // 1. Get totals from ALL existing Fee records (this covers previous months and current month if invoices exist)
-        // (Handled by the aggregate query above)
+        // 1. Get totals from ALL existing Fee records
+        // (Already handled by totals aggregate above)
 
-        // 2. Identify students who DO NOT have ANY fee invoice (paid or unpaid) for the current month
-        // We need to add their default monthly fees because they technically owe for the current month.
-        const studentsWithInvoicesThisMonth = await Fee.distinct('studentId', { month: currentMonth, year: currentYear });
+        // 2. Identify students who DO NOT have ANY fee invoice for the current month
+        // We only consider 'active' students. 'batch_pending' students are excluded as they don't have fees yet.
+        const studentsWithInvoicesThisMonth = await Fee.distinct('studentId', { month: currentMonth, year: currentYear, isDeleted: { $ne: true } });
 
         const studentsWithoutInvoicesThisMonth = await Student.find({
-            status: 'active',
+            status: 'active', // Strictly 'active', not 'batch_pending' or others
             _id: { $nin: studentsWithInvoicesThisMonth }
         }).select('fees registrationFee').lean();
 
@@ -174,6 +180,23 @@ exports.createFee = async (req, res) => {
                 details: { month, year: currentYear, amount: numericAmount },
                 ipAddress: req.ip
             });
+        }
+
+        // Email Notification
+        const studentInfo = await Student.findById(studentId).select('name email');
+        if (studentInfo && studentInfo.email) {
+            queueNotification({
+                recipientEmail: studentInfo.email,
+                recipientName: studentInfo.name,
+                subject: `Fee Invoice Generated: ${month} ${currentYear}`,
+                type: 'fee_generated',
+                data: {
+                    month,
+                    year: currentYear,
+                    amount: numericAmount,
+                    dueDate: new Date(dueDate).toLocaleDateString()
+                }
+            }).catch(e => console.error('[FeeEmail] Error queuing notification:', e));
         }
 
         res.status(201).json({ message: 'Fee record created successfully', fee });
@@ -278,6 +301,23 @@ exports.capturePayment = async (req, res) => {
             ipAddress: req.ip
         });
 
+        // Email Notification: Fee Paid
+        const studentInfo = await Student.findById(fee.studentId).select('name email');
+        if (studentInfo && studentInfo.email) {
+            queueNotification({
+                recipientEmail: studentInfo.email,
+                recipientName: studentInfo.name,
+                subject: `Payment Received — Receipt ${receiptNo}`,
+                type: 'fee_paid',
+                data: {
+                    amountPaid: paid,
+                    receiptNo,
+                    paymentMode: mode || 'Cash',
+                    remainingBalance: fee.pendingAmount
+                }
+            }).catch(e => console.error('[FeeEmail] fee_paid notification error:', e));
+        }
+
         res.json({ message: 'Payment recorded successfully', fee, receiptNo });
     } catch (err) {
         console.error('Capture Payment Error:', err);
@@ -287,7 +327,7 @@ exports.capturePayment = async (req, res) => {
 
 // Internal helper to generate fee records for a list of students
 async function _generateFeeRecords(students, month, year, dueDate) {
-    if (!students || students.length === 0) return 0;
+    if (!students || students.length === 0) return { count: 0, skipped: 0 };
 
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
     const monthIndex = monthNames.indexOf(month);
@@ -295,19 +335,36 @@ async function _generateFeeRecords(students, month, year, dueDate) {
     const endOfTargetMonth = new Date(year, monthIndex + 1, 0, 23, 59, 59);
 
     const eligibleStudents = students.filter(s => {
+        if (!s.batchId) return false; // Skip students without a batch
         if (s.admissionDate && s.admissionDate > endOfTargetMonth) return false;
-        if (s.batchId) {
-            const bStart = s.batchId.startDate;
-            const bEnd = s.batchId.endDate;
-            if (bStart && bStart > endOfTargetMonth) return false;
-            if (bEnd && bEnd < startOfTargetMonth) return false;
-        }
+
+        const bStart = s.batchId.startDate;
+        const bEnd = s.batchId.endDate;
+        if (bStart && bStart > endOfTargetMonth) return false;
+        if (bEnd && bEnd < startOfTargetMonth) return false;
+
         return true;
     });
 
-    if (eligibleStudents.length === 0) return 0;
+    if (eligibleStudents.length === 0) return { count: 0, skipped: 0 };
 
-    const feeRecords = eligibleStudents.map(s => {
+    // Find students who ALREADY have a fee generated for this month/year (duplicate prevention)
+    const existingFees = await Fee.find({
+        month: month,
+        year: year,
+        studentId: { $in: eligibleStudents.map(s => s._id) }
+    }).select('studentId').lean();
+
+    const existingStudentIds = new Set(existingFees.map(f => f.studentId.toString()));
+    let skippedCount = 0;
+
+    const feeRecords = [];
+
+    eligibleStudents.forEach(s => {
+        if (existingStudentIds.has(s._id.toString())) {
+            skippedCount++;
+            return; // Skip this student
+        }
         const baseAmount = s.batchId?.fees || s.fees || 0;
 
         // Include registration fee ONLY if billing month/year matches admission month/year
@@ -322,7 +379,7 @@ async function _generateFeeRecords(students, month, year, dueDate) {
             }
         }
 
-        return {
+        feeRecords.push({
             studentId: s._id,
             batchId: s.batchId?._id,
             monthlyTuitionFee: baseAmount,
@@ -334,17 +391,60 @@ async function _generateFeeRecords(students, month, year, dueDate) {
             year: year,
             dueDate: dueDate || new Date(year, monthIndex, 10),
             status: 'pending'
-        };
+        });
     });
 
     let count = 0;
     try {
-        const result = await Fee.insertMany(feeRecords, { ordered: false });
-        count = result.length;
+        if (feeRecords.length > 0) {
+            const result = await Fee.insertMany(feeRecords, { ordered: false });
+            count = result.length;
+
+            // Queue Email Notifications for all newly generated fees
+            const successfulFees = result;
+            successfulFees.forEach(fee => {
+                const student = eligibleStudents.find(s => s._id.toString() === fee.studentId.toString());
+                if (student && student.email) {
+                    queueNotification({
+                        recipientEmail: student.email,
+                        recipientName: student.name,
+                        subject: `Fee Invoice Generated: ${month} ${year}`,
+                        type: 'fee_generated',
+                        data: {
+                            month,
+                            year,
+                            amount: fee.totalFee, // Sending the total including registration if applicable
+                            dueDate: fee.dueDate.toLocaleDateString()
+                        }
+                    }).catch(e => console.error('[FeeEmail] Bulk - Error queuing notification:', e));
+                }
+            });
+        }
     } catch (error) {
         count = error.result?.nInserted || 0;
+
+        // Email the ones that succeeded even in a partial bulk failure
+        if (error.insertedDocs && error.insertedDocs.length > 0) {
+            error.insertedDocs.forEach(fee => {
+                const student = eligibleStudents.find(s => s._id.toString() === fee.studentId.toString());
+                if (student && student.email) {
+                    queueNotification({
+                        recipientEmail: student.email,
+                        recipientName: student.name,
+                        subject: `Fee Invoice Generated: ${month} ${year}`,
+                        type: 'fee_generated',
+                        data: {
+                            month,
+                            year,
+                            amount: fee.totalFee,
+                            dueDate: fee.dueDate.toLocaleDateString()
+                        }
+                    }).catch(e => console.error('[FeeEmail] Bulk Partial - Error queuing:', e));
+                }
+            });
+        }
     }
-    return count;
+    return { count, skipped: skippedCount };
 }
 
 // POST /api/fees/generate — Bulk generate monthly fees
@@ -356,13 +456,23 @@ exports.generateFees = async (req, res) => {
         const targetYear = parseInt(year) || now.getFullYear();
 
         const students = await Student.find({ status: 'active' }).populate('batchId');
-        const count = await _generateFeeRecords(students, targetMonth, targetYear, dueDate ? new Date(dueDate) : null);
+        const { count, skipped } = await _generateFeeRecords(students, targetMonth, targetYear, dueDate ? new Date(dueDate) : null);
+
+        let msg = '';
+        if (count > 0 && skipped > 0) {
+            msg = `Successfully generated ${count} fee records for ${targetMonth} ${targetYear}. Skipped ${skipped} students who already had invoices.`;
+        } else if (count > 0) {
+            msg = `Successfully generated ${count} fee records for ${targetMonth} ${targetYear}.`;
+        } else if (skipped > 0) {
+            msg = `All ${skipped} eligible students already have fee records for ${targetMonth} ${targetYear}. No new records generated.`;
+        } else {
+            msg = `No new fee records were generated for this period.`;
+        }
 
         res.status(201).json({
-            message: count > 0
-                ? `Successfully generated ${count} fee records for ${targetMonth} ${targetYear}.`
-                : `No new fee records were generated for this period.`,
-            count
+            message: msg,
+            count,
+            skipped
         });
     } catch (err) {
         res.status(500).json({ message: 'Bulk generation failed', error: err.message });
@@ -380,7 +490,8 @@ exports.ensureMonthlyFeeForStudents = async (studentIds) => {
         const year = now.getFullYear();
 
         const students = await Student.find({ _id: { $in: studentIds } }).populate('batchId');
-        return await _generateFeeRecords(students, month, year, null);
+        const result = await _generateFeeRecords(students, month, year, null);
+        return result.count;
     } catch (err) {
         console.error('[ensureMonthlyFeeForStudents] Error:', err);
         return 0;
@@ -412,5 +523,55 @@ exports.deleteFee = async (req, res) => {
         res.json({ message: 'Fee record deleted' });
     } catch (err) {
         res.status(500).json({ message: 'Server error', error: err.message });
+    }
+};
+
+// POST /api/fees/bulk-surcharge — Add expense to multiple fee records
+exports.addBulkSurcharge = async (req, res) => {
+    try {
+        const { feeIds, title, amount, date, description } = req.body;
+
+        if (!Array.isArray(feeIds) || feeIds.length === 0) {
+            return res.status(400).json({ message: 'At least one fee record must be selected.' });
+        }
+
+        if (!title || !amount) {
+            return res.status(400).json({ message: 'Title and amount are required for surcharges.' });
+        }
+
+        const numericAmount = parseFloat(amount);
+        const expenseDate = date ? new Date(date) : new Date();
+
+        // Process all fees individually to trigger pre-save hooks (total recalculation)
+        const results = await Promise.all(feeIds.map(async (id) => {
+            try {
+                const fee = await Fee.findById(id);
+                if (!fee) return { id, status: 'not_found' };
+
+                fee.otherExpenses.push({
+                    title,
+                    amount: numericAmount,
+                    date: expenseDate,
+                    description
+                });
+
+                await fee.save();
+                return { id, status: 'success' };
+            } catch (e) {
+                return { id, status: 'failed', error: e.message };
+            }
+        }));
+
+        const successCount = results.filter(r => r.status === 'success').length;
+        const failedCount = results.length - successCount;
+
+        res.json({
+            message: `Surcharge applied to ${successCount} records. ${failedCount > 0 ? failedCount + ' failed.' : ''}`,
+            successCount,
+            failedCount
+        });
+    } catch (err) {
+        console.error('Bulk Surcharge Error:', err);
+        res.status(500).json({ message: 'Internal server error while processing bulk surcharge', error: err.message });
     }
 };

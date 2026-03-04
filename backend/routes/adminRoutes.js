@@ -21,5 +21,6 @@ router.post('/signup', upload.single('instituteLogo'), adminController.signup);
 router.post('/login', adminController.login);
 router.get('/profile', auth, adminController.getProfile);
 router.put('/profile', auth, upload.single('instituteLogo'), adminController.updateProfile);
+router.put('/settings', auth, adminController.updateSettings);
 
 module.exports = router;

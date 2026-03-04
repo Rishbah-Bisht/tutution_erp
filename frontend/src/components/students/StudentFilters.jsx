@@ -48,6 +48,7 @@ const StudentFilters = ({
                     <option value="">Status Filters</option>
                     <option value="all">All Records</option>
                     <option value="active">Active</option>
+                    <option value="batch_pending">Batch Pending</option>
                     <option value="inactive">Inactive</option>
                     <option value="completed">Completed</option>
                 </select>
@@ -77,7 +78,7 @@ const StudentFilters = ({
                         .map(b => <option key={b._id} value={b._id}>{b.name}</option>)}
                 </select>
 
-                
+
 
                 <div style={{ width: 1, height: 20, background: 'var(--erp-border)', margin: '0 4px' }}></div>
 

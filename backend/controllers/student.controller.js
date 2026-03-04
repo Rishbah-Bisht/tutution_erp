@@ -5,6 +5,7 @@ const Fee = require('../models/Fee');
 const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
 const feeController = require('./fee.controller');
+const { queueNotification } = require('../services/emailService');
 
 // GET /api/students/stats
 exports.getStudentStats = async (req, res) => {
@@ -13,9 +14,15 @@ exports.getStudentStats = async (req, res) => {
         const active = await Student.countDocuments({ status: 'active' });
         const completed = await Student.countDocuments({ status: 'completed' });
 
-        // Fee pending: students who have at least one fee record that is not 'paid'
-        const pendingStudents = await Fee.distinct('studentId', { status: { $in: ['pending', 'partial', 'overdue'] } });
-        const feePending = pendingStudents.length;
+        // Fee pending: unique students who are ACTIVE and have at least one non-deleted fee record that is not 'paid'
+        const pendingFeeStudentIds = await Fee.distinct('studentId', {
+            status: { $in: ['pending', 'partial', 'overdue'] },
+            isDeleted: { $ne: true }
+        });
+        const feePending = await Student.countDocuments({
+            _id: { $in: pendingFeeStudentIds },
+            status: 'active'
+        });
 
         // New admissions this month
         const startOfMonth = new Date();
@@ -117,18 +124,38 @@ exports.createStudent = async (req, res) => {
             registrationFee: data.registrationFee || 0,
             fatherName: data.fatherName,
             motherName: data.motherName,
-            currentYear: data.currentYear || '1'
+            currentYear: data.currentYear || '1',
+            status: data.batchId ? 'active' : 'batch_pending'
         };
 
         const student = new Student(studentData);
         await student.save();
 
-        // Automatically ensure fee for current month
-        await feeController.ensureMonthlyFeeForStudents([student._id]);
+        // QUEUE WELCOME EMAIL
+        if (student.email) {
+            await queueNotification({
+                recipientEmail: student.email,
+                recipientName: student.name,
+                subject: 'Welcome to ABC Institute',
+                type: 'registration',
+                data: {
+                    rollNo: student.rollNo,
+                    password: req.body.password || 'student@123'
+                }
+            });
+        }
+
+        // Automatically ensure fee for current month ONLY if batch assigned
+        if (student.batchId) {
+            await feeController.ensureMonthlyFeeForStudents([student._id]);
+        }
 
         const result = student.toObject();
         delete result.password;
-        res.status(201).json({ message: 'Student created and fee generated', student: result });
+        res.status(201).json({
+            message: student.batchId ? 'Student created and fee generated' : 'Student created (Batch Pending)',
+            student: result
+        });
     } catch (err) {
         console.error('[createStudent]', err);
         res.status(500).json({ message: 'Server error', error: err.message });
@@ -148,30 +175,50 @@ exports.updateStudent = async (req, res) => {
             delete data.batchId;
         }
 
-        if (data.password && data.password.trim() !== '') {
-            data.password = await bcrypt.hash(data.password, 10);
-        } else {
-            delete data.password;
+        const oldStudent = await Student.findById(req.params.id);
+        if (!oldStudent) return res.status(404).json({ message: 'Student not found' });
+
+        const isActivatingBatch = !oldStudent.batchId && data.batchId;
+
+        if (isActivatingBatch && oldStudent.status === 'batch_pending') {
+            data.status = 'active';
         }
 
         const student = await Student.findByIdAndUpdate(req.params.id, data, { new: true });
-        if (!student) return res.status(404).json({ message: 'Student not found' });
-        res.json({ message: 'Updated', student });
+
+        // If batch was just assigned, generate fees
+        if (isActivatingBatch) {
+            await feeController.ensureMonthlyFeeForStudents([student._id]);
+
+            // QUEUE BATCH ASSIGNMENT NOTIFICATION
+            if (student.email && data.batchId) {
+                const batch = await require('../models/Batch').findById(data.batchId);
+                await queueNotification({
+                    recipientEmail: student.email,
+                    recipientName: student.name,
+                    subject: 'New Batch Assigned - ABC Institute',
+                    type: 'batch_assignment',
+                    data: {
+                        batchName: batch?.name || 'Assigned Batch',
+                        course: student.className || 'General',
+                        timing: batch?.timeSlots?.[0] || 'TBA'
+                    }
+                });
+            }
+        }
+
+        res.json({
+            message: isActivatingBatch ? 'Batch assigned and fees generated' : 'Updated',
+            student
+        });
     } catch (err) {
         res.status(500).json({ message: 'Server error', error: err.message });
     }
 };
 
-// DELETE /api/students/:id (Admin password required)
+// DELETE /api/students/:id
 exports.deleteStudent = async (req, res) => {
     try {
-        const { adminPassword } = req.body;
-        if (!adminPassword) return res.status(400).json({ message: 'Admin password required' });
-
-        const admin = await Admin.findOne();
-        const valid = await bcrypt.compare(adminPassword, admin.password);
-        if (!valid) return res.status(401).json({ message: 'Incorrect admin password' });
-
         const student = await Student.findByIdAndDelete(req.params.id);
         if (!student) return res.status(404).json({ message: 'Student not found' });
         res.json({ message: 'Deleted' });
@@ -180,16 +227,9 @@ exports.deleteStudent = async (req, res) => {
     }
 };
 
-// DELETE /api/students/delete-all (Admin password required)
+// DELETE /api/students/delete-all
 exports.deleteAllStudents = async (req, res) => {
     try {
-        const { adminPassword } = req.body;
-        if (!adminPassword) return res.status(400).json({ message: 'Admin password required' });
-
-        const admin = await Admin.findOne();
-        const valid = await bcrypt.compare(adminPassword, admin.password);
-        if (!valid) return res.status(401).json({ message: 'Incorrect admin password' });
-
         await Student.deleteMany({});
         res.json({ message: 'All students deleted successfully' });
     } catch (err) {
@@ -227,60 +267,72 @@ exports.bulkUpload = async (req, res) => {
             batchMap[b.name.toLowerCase().trim()] = b._id;
         });
 
+        // Helper to safely parse naive "DD-MM-YYYY" or standard dates into JS Date objects
+        const parseExcelDate = (dateVal) => {
+            if (!dateVal) return undefined;
+            if (dateVal instanceof Date) return dateVal;
+            if (typeof dateVal === 'number') return new Date((dateVal - (25567 + 2)) * 86400 * 1000);
+            if (typeof dateVal === 'string') {
+                const parts = dateVal.split('-');
+                if (parts.length === 3) return new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00Z`);
+            }
+            return new Date(dateVal);
+        };
+
         // Using individual save() to ensure pre-save hooks (password hashing) trigger
         await Promise.all(students.map(async (s, i) => {
             try {
+                // Flexible Field Mapping (Normalization)
+                const getValue = (keys) => {
+                    const match = keys.find(k => s[k] !== undefined);
+                    return match !== undefined ? s[match] : undefined;
+                };
+
                 // Resolve text batchName to Mongo ID
-                let resolvedBatchId = s.batchId;
-                if (!resolvedBatchId && s.batchName) {
-                    const cleanName = String(s.batchName).toLowerCase().trim();
+                let resolvedBatchId = getValue(['batchId', 'BATCHNAME', 'Batch Name', 'Batch', 'batchName']);
+                if (resolvedBatchId && !mongoose.Types.ObjectId.isValid(resolvedBatchId)) {
+                    const cleanName = String(resolvedBatchId).toLowerCase().trim();
                     resolvedBatchId = batchMap[cleanName] || null;
                 }
 
-                // Helper to safely parse naive "DD-MM-YYYY" or standard dates into JS Date objects
-                const parseExcelDate = (dateVal) => {
-                    if (!dateVal) return undefined;
-
-                    // If it's already a JS Date
-                    if (dateVal instanceof Date) return dateVal;
-
-                    // If it's an Excel serial date number (e.g. 40314 = 15-May-2010 approx)
-                    if (typeof dateVal === 'number') {
-                        return new Date((dateVal - (25567 + 2)) * 86400 * 1000);
-                    }
-
-                    // If it's a string like "15-05-2010"
-                    if (typeof dateVal === 'string') {
-                        const parts = dateVal.split('-');
-                        if (parts.length === 3) {
-                            // Convert DD-MM-YYYY to YYYY-MM-DD for standard parsing
-                            return new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00Z`);
-                        }
-                    }
-                    return new Date(dateVal); // final fallback
-                };
-
                 const student = new Student({
-                    name: s.name,
-                    rollNo: s.rollNo || `${yearPrefix}${String(nextNum + i).padStart(2, '0')}`,
+                    name: String(getValue(['name', 'NAME', 'Student Name', 'STUDENT NAME']) || '').trim(),
+                    rollNo: getValue(['rollNo', 'ROLL NO', 'Roll Number']) || `${yearPrefix}${String(nextNum + i).padStart(2, '0')}`,
                     batchId: resolvedBatchId,
-                    className: s.className,
-                    contact: String(s.phone || s.contact || ''),
-                    email: s.email,
-                    gender: s.gender,
-                    address: s.address,
-                    dob: parseExcelDate(s.dob),
-                    admissionDate: parseExcelDate(s.admissionDate) || new Date(),
-                    session: s.session,
-                    fees: s.fees ? Number(s.fees) : 0,
-                    status: s.status ? String(s.status).toLowerCase().trim() : 'active',
-                    fatherName: s.fatherName,
-                    motherName: s.motherName,
-                    currentYear: s.currentYear || '1',
-                    password: await require('bcryptjs').hash('student@123', 10)
+                    className: String(getValue(['className', 'CLASSNAME', 'STANDARD / COURSE', 'Standard', 'Course', 'CLASS']) || '').trim(),
+                    contact: String(getValue(['phone', 'PHONE', 'contact', 'CONTACT', 'MOBILE NUMBER', 'Mobile']) || '').trim(),
+                    email: String(getValue(['email', 'EMAIL', 'EMAIL ADDRESS', 'Email Address']) || '').toLowerCase().trim() || undefined,
+                    gender: String(getValue(['gender', 'GENDER']) || '').trim().replace(/^\w/, c => c.toUpperCase()),
+                    address: String(getValue(['address', 'ADDRESS', 'FULL ADDRESS', 'Full Address']) || '').trim(),
+                    dob: parseExcelDate(getValue(['dob', 'DOB', 'DATE OF BIRTH', 'Date of Birth'])),
+                    admissionDate: parseExcelDate(getValue(['admissionDate', 'ADMISSION DATE', 'Admission Date'])) || new Date(),
+                    session: String(getValue(['session', 'SESSION']) || '').trim(),
+                    fees: Number(getValue(['fees', 'FEES', 'FEE'])) || 0,
+                    status: resolvedBatchId ? 'active' : 'batch_pending',
+                    fatherName: String(getValue(['fatherName', 'FATHER NAME', "FATHER'S NAME", 'Father Name']) || '').trim(),
+                    motherName: String(getValue(['motherName', 'MOTHER NAME', "MOTHER'S NAME", 'Mother Name']) || '').trim(),
+                    currentYear: String(getValue(['currentYear', 'CURRENT YEAR']) || '1').trim(),
+                    password: 'student@123'
                 });
                 await student.save();
-                newStudentIds.push(student._id);
+
+                // QUEUE WELCOME EMAIL
+                if (student.email) {
+                    await queueNotification({
+                        recipientEmail: student.email,
+                        recipientName: student.name,
+                        subject: 'Welcome to ABC Institute',
+                        type: 'registration',
+                        data: {
+                            rollNo: student.rollNo,
+                            password: 'student@123'
+                        }
+                    });
+                }
+
+                if (student.batchId) {
+                    newStudentIds.push(student._id);
+                }
                 successCount++;
             } catch (err) {
                 failedCount++;
@@ -288,7 +340,7 @@ exports.bulkUpload = async (req, res) => {
             }
         }));
 
-        // Generate fees for all successfully added students
+        // Generate fees ONLY for students who were successfully assigned a batch
         if (newStudentIds.length > 0) {
             await feeController.ensureMonthlyFeeForStudents(newStudentIds);
         }
@@ -331,6 +383,26 @@ exports.getBatches = async (req, res) => {
             };
         }));
         res.json({ batches: batchDetails });
+    } catch (err) {
+        res.status(500).json({ message: 'Server error', error: err.message });
+    }
+};
+
+// GET /api/students/:id
+exports.getStudentById = async (req, res) => {
+    try {
+        const student = await Student.findById(req.params.id)
+            .populate('batchId', 'name subjects fees capacity course')
+            .lean();
+
+        if (!student) return res.status(404).json({ message: 'Student not found' });
+
+        // Get full fee history for this student
+        const fees = await Fee.find({ studentId: student._id })
+            .sort({ createdAt: -1 })
+            .lean();
+
+        res.json({ student, fees });
     } catch (err) {
         res.status(500).json({ message: 'Server error', error: err.message });
     }

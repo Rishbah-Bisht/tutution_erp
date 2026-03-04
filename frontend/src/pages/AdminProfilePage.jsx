@@ -26,7 +26,8 @@ const AdminProfilePage = () => {
         adminName: '', coachingName: '', email: '', phone: '', bio: '',
         registrationNumber: '', roomsAvailable: '',
         themeColor1: '#1b3a7a', themeColor2: '#c53030', classesOffered: '',
-        instituteAddress: '', instituteEmail: '', institutePhone: ''
+        instituteAddress: '', instituteEmail: '', institutePhone: '',
+        emailNotificationsEnabled: true
     });
     const [logoPreview, setLogoPreview] = useState('');
     const [logoFile, setLogoFile] = useState(null);
@@ -50,7 +51,8 @@ const AdminProfilePage = () => {
                 classesOffered: (data.classesOffered || []).join(', '),
                 instituteAddress: data.instituteAddress || '',
                 instituteEmail: data.instituteEmail || '',
-                institutePhone: data.institutePhone || ''
+                institutePhone: data.institutePhone || '',
+                emailNotificationsEnabled: data.emailNotificationsEnabled !== false
             });
             setLogoPreview(data.instituteLogo || '');
         } catch (err) {
@@ -86,7 +88,8 @@ const AdminProfilePage = () => {
                 classesOffered: (profile.classesOffered || []).join(', '),
                 instituteAddress: profile.instituteAddress || '',
                 instituteEmail: profile.instituteEmail || '',
-                institutePhone: profile.institutePhone || ''
+                institutePhone: profile.institutePhone || '',
+                emailNotificationsEnabled: profile.emailNotificationsEnabled !== false
             });
             setLogoPreview(profile.instituteLogo || '');
             setLogoFile(null);
@@ -123,13 +126,14 @@ const AdminProfilePage = () => {
             formData.append('bio', form.bio);
             formData.append('registrationNumber', form.registrationNumber);
             formData.append('roomsAvailable', form.roomsAvailable);
-            formData.append('currentPassword', password);
+            formData.append('adminPassword', password);
             formData.append('themeColors', JSON.stringify([form.themeColor1, form.themeColor2]));
             const classesArray = form.classesOffered.split(',').map(c => c.trim()).filter(Boolean);
             formData.append('classesOffered', JSON.stringify(classesArray));
             formData.append('instituteAddress', form.instituteAddress);
             formData.append('instituteEmail', form.instituteEmail);
             formData.append('institutePhone', form.institutePhone);
+            formData.append('emailNotificationsEnabled', form.emailNotificationsEnabled);
             if (logoFile) formData.append('instituteLogo', logoFile);
 
             const { data } = await updateAdminProfile(formData);
@@ -308,6 +312,7 @@ const AdminProfilePage = () => {
                                     { icon: <Mail size={15} />, label: 'Inst. Email', value: profile?.instituteEmail || '—' },
                                     { icon: <Phone size={15} />, label: 'Inst. Phone', value: profile?.institutePhone || '—' },
                                     { icon: <BookOpen size={15} />, label: 'Classes Offered', value: (profile?.classesOffered || []).join(', ') || '—', full: true },
+                                    { icon: <ShieldCheck size={15} />, label: 'Automated Emails', value: profile?.emailNotificationsEnabled !== false ? 'Enabled' : 'Disabled', full: true },
                                 ].map((item, i) => (
                                     <div key={i} style={{
                                         gridColumn: item.full ? '1 / -1' : 'auto',
@@ -425,6 +430,38 @@ const AdminProfilePage = () => {
                                     </div>
                                 ))}
                             </div>
+
+                            <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 10, marginTop: 24 }}>
+                                System Settings <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
+                                <div className="lf" style={{ padding: 16, background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <div>
+                                        <label style={{ margin: 0 }}><Mail size={14} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} />Automated Email Notifications</label>
+                                        <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: '#64748b' }}>Send automated emails for fees, batch assignments, and registrations.</p>
+                                    </div>
+                                    <label style={{ position: 'relative', display: 'inline-block', width: 44, height: 24 }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={form.emailNotificationsEnabled}
+                                            onChange={(e) => setForm({ ...form, emailNotificationsEnabled: e.target.checked })}
+                                            style={{ opacity: 0, width: 0, height: 0 }}
+                                        />
+                                        <span style={{
+                                            position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
+                                            backgroundColor: form.emailNotificationsEnabled ? '#10b981' : '#cbd5e1',
+                                            transition: '.4s', borderRadius: 24
+                                        }}>
+                                            <span style={{
+                                                position: 'absolute', content: '""', height: 18, width: 18, left: 3, bottom: 3,
+                                                backgroundColor: 'white', transition: '.4s', borderRadius: '50%',
+                                                transform: form.emailNotificationsEnabled ? 'translateX(20px)' : 'translateX(0)'
+                                            }} />
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
                         </form>
                     )}
                 </div>
@@ -433,12 +470,11 @@ const AdminProfilePage = () => {
             <ActionModal
                 isOpen={showConfirm}
                 onClose={() => setShowConfirm(false)}
-                title="Verify Identity"
-                subtitle="Enter your current password to save profile changes."
-                confirmText="Verify & Save"
-                actionType="verify"
                 onConfirm={confirmUpdate}
-                requirePassword={true}
+                title="Verify Identity"
+                description="Please enter your current administrative password to authorize and save these profile changes."
+                actionType="verify"
+                loading={submitting}
             />
         </ERPLayout>
     );

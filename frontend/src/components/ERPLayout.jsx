@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-    LayoutDashboard, GraduationCap, BookOpen, CheckSquare, Sparkles,
-    Wallet, Receipt, Settings, LogOut, Menu, X, Building2, Users2, UserCircle, Banknote, LineChart
+    LayoutDashboard, GraduationCap, BookOpen, Sparkles,
+    Wallet, Receipt, Settings, LogOut, Menu, X, Building2, Users2, UserCircle, Banknote, LineChart, Bell, Trophy
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -17,9 +17,8 @@ const NAV_ITEMS = [
         items: [
             { to: '/students', icon: GraduationCap, label: 'Students' },
             { to: '/batches', icon: BookOpen, label: 'Batches' },
-            { to: '/scheduler', icon: Sparkles, label: 'AI Scheduler' },
             { to: '/teachers', icon: Users2, label: 'Teachers' },
-            { to: '/attendance', icon: CheckSquare, label: 'Attendance' },
+            { to: '/exams', icon: Trophy, label: 'Exams & Results' },
         ]
     },
     {
@@ -35,6 +34,7 @@ const NAV_ITEMS = [
         section: 'ADMIN',
         items: [
             { to: '/profile', icon: UserCircle, label: 'Institute Profile' },
+            { to: '/notifications', icon: Bell, label: 'Email Notifications' },
             { to: '/settings', icon: Settings, label: 'Settings' },
         ]
     }
@@ -75,7 +75,7 @@ const ERPLayout = ({ children, title }) => {
                             <img
                                 src={admin.instituteLogo}
                                 alt="Logo"
-                                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 4 }}
+                                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 0 }}
                                 onError={(e) => {
                                     e.target.style.display = 'none';
                                     e.target.parentElement.innerHTML = '<div class="sb-logo-fallback"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-building-2"><path d="M6 22V4c0-.6.4-1 1-1h10c.6 0 1 .4 1 1v18"/><path d="M6 18h12"/><path d="M10 8h4"/><path d="M10 12h4"/><path d="M10 16h4"/><path d="M3 22h18"/></svg></div>';

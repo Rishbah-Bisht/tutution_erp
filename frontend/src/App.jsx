@@ -12,13 +12,21 @@ import TeachersPage from './pages/TeachersPage';
 import ExpensesPage from './pages/ExpensesPage';
 import TeacherDashboard from './pages/TeacherDashboard';
 import StudentDashboard from './pages/StudentDashboard';
-import AISchedulerPage from './pages/AISchedulerPage';
 import TeacherPayrollDashboard from './pages/TeacherPayrollDashboard';
 import { API_BASE_URL } from './api/apiConfig';
 import AnalyticsPage from './pages/AnalyticsPage';
+import BatchDetailsPage from './pages/BatchDetailsPage';
+import StudentProfilePage from './pages/StudentProfilePage';
+import NotificationHistoryPage from './pages/NotificationHistoryPage';
+import SettingsPage from './pages/SettingsPage';
+import ExamsPage from './pages/ExamsPage';
 
 function App() {
     useEffect(() => {
+        // Set default values in case network fails - Match index.css charcoal theme
+        document.documentElement.style.setProperty('--erp-primary', '#0f172a');
+        document.documentElement.style.setProperty('--erp-secondary', '#2563eb');
+
         // Fetch baseline institute settings (Publicly accessible)
         axios.get(`${API_BASE_URL}/api/settings`)
             .then(res => {
@@ -44,13 +52,17 @@ function App() {
                 <Route path="/dashboard" element={<AdminDashboard />} />
                 <Route path="/profile" element={<AdminProfilePage />} />
                 <Route path="/students" element={<StudentsPage />} />
+                <Route path="/students/:id" element={<StudentProfilePage />} />
                 <Route path="/fees" element={<FeesPage />} />
                 <Route path="/batches" element={<BatchesPage />} />
-                <Route path="/scheduler" element={<AISchedulerPage />} />
+                <Route path="/batches/:id" element={<BatchDetailsPage />} />
                 <Route path="/teachers" element={<TeachersPage />} />
                 <Route path="/payroll" element={<TeacherPayrollDashboard />} />
                 <Route path="/expenses" element={<ExpensesPage />} />
                 <Route path="/analytics" element={<AnalyticsPage />} />
+                <Route path="/notifications" element={<NotificationHistoryPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/exams" element={<ExamsPage />} />
 
                 {/* Teacher Routes */}
                 <Route path="/teacher-dashboard" element={<TeacherDashboard />} />

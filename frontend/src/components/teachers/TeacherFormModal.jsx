@@ -6,9 +6,10 @@ import {
     Info, Trash2, CheckCircle2, ChevronRight, User, Hash, IndianRupee,
     ListChecks, AlertTriangle, ArrowLeft, ArrowRight
 } from 'lucide-react';
+import ActionModal from '../common/ActionModal';
 
 // --- Theme Constants ---
-const primaryColor = '#059669'; // Emerald 600
+const primaryColor = 'var(--erp-primary)'; // Dynamic from CSS variables
 const sharpRadius = '4px';
 const borderColor = '#e2e8f0';
 const labelColor = '#475569';
@@ -38,65 +39,6 @@ const AlertMessage = ({ type, message, style }) => {
     );
 };
 
-const ActionModal = ({ isOpen, onClose, onConfirm, title, description, loading, error }) => {
-    const [pwd, setPwd] = useState('');
-    if (!isOpen) return null;
-
-    return (
-        <div style={{
-            position: 'fixed', inset: 0, zIndex: 200,
-            backgroundColor: 'rgba(15, 23, 42, 0.7)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            backdropFilter: 'blur(2px)'
-        }}>
-            <div style={{
-                backgroundColor: '#fff', width: '420px', padding: '32px',
-                borderRadius: sharpRadius, border: `1px solid ${borderColor}`,
-                boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
-            }}>
-                <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-                    <div style={{ background: '#fef2f2', padding: 8, borderRadius: '4px', color: '#dc2626' }}>
-                        <ShieldAlert size={20} />
-                    </div>
-                    <div>
-                        <h3 style={{ fontSize: '1rem', fontWeight: 800, color: headingColor }}>{title}</h3>
-                    </div>
-                </div>
-                <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: 24, lineHeight: 1.6 }}>{description}</p>
-
-                <div style={{ marginBottom: 24 }}>
-                    <label style={{ fontSize: '0.7rem', fontWeight: 900, color: labelColor, display: 'block', marginBottom: 8, letterSpacing: '0.05em' }}>ADMIN PASSWORD</label>
-                    <input
-                        type="password"
-                        value={pwd}
-                        onChange={(e) => setPwd(e.target.value)}
-                        placeholder="Required for authorization"
-                        style={{
-                            width: '100%', padding: '12px', border: `1.5px solid ${borderColor}`,
-                            borderRadius: sharpRadius, fontSize: '0.9rem', outline: 'none'
-                        }}
-                    />
-                    {error && <p style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: 6, fontWeight: 600 }}>{error}</p>}
-                </div>
-
-                <div style={{ display: 'flex', gap: 12 }}>
-                    <button onClick={onClose} style={{ flex: 1, padding: '12px', fontWeight: 800, cursor: 'pointer', border: `1px solid ${borderColor}`, background: '#fff', borderRadius: sharpRadius, fontSize: '0.75rem' }}>CANCEL</button>
-                    <button
-                        onClick={() => onConfirm(pwd)}
-                        disabled={loading || !pwd}
-                        style={{
-                            flex: 1, padding: '12px', fontWeight: 800, cursor: 'pointer', border: 'none',
-                            background: primaryColor, color: '#fff', borderRadius: sharpRadius,
-                            opacity: (loading || !pwd) ? 0.6 : 1, fontSize: '0.75rem'
-                        }}
-                    >
-                        {loading ? 'VERIFYING...' : 'AUTHORIZE'}
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
 
 const SubjectPicker = ({ subjects, selected, onToggle, batchId, teacherId, API }) => {
     const [conflicts, setConflicts] = useState({});
@@ -565,9 +507,10 @@ const TeacherFormModal = ({ mode, teacher, batches, toast, onSave, onClose, API,
             <ActionModal
                 isOpen={pwdModal}
                 onClose={() => setPwdModal(false)}
-                onConfirm={(pwd) => doUpdate(pwd)}
+                onConfirm={doUpdate}
                 title="Authorization Required"
-                description="Administrative privileges are required to update faculty records. Please enter your password to confirm."
+                description={`You are updating records for "${name}". Administrative privileges are required to confirm these changes.`}
+                actionType="verify"
                 loading={pwdLoading}
                 error={pwdErr}
             />

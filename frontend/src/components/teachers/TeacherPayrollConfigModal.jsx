@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 // --- Theme Constants ---
-const primaryColor = '#059669'; // Emerald 600
+const primaryColor = 'var(--erp-primary)';
 const sharpRadius = '4px';
 const borderColor = '#e2e8f0';
 const labelColor = '#475569';
@@ -15,7 +15,7 @@ const headingColor = '#0f172a';
 
 // --- Internal UI Components ---
 
-const SectionDivider = ({ label, color = '#059669', icon: Icon }) => (
+const SectionDivider = ({ label, color = 'var(--erp-primary)', icon: Icon }) => (
     <div style={{
         fontSize: '0.72rem', fontWeight: 800, color, textTransform: 'uppercase',
         letterSpacing: '0.1em', marginBottom: 20, marginTop: 10,
@@ -26,11 +26,45 @@ const SectionDivider = ({ label, color = '#059669', icon: Icon }) => (
     </div>
 );
 
-const CurrentMonthBanner = ({ salary }) => {
-    if (!salary) return null;
+const CurrentMonthBanner = ({ salary, onGenerate, generating, selectedMonth }) => {
+    const monthLabel = new Date(selectedMonth + '-01').toLocaleString('default', { month: 'long', year: 'numeric' });
 
-    const currentMonth = new Date().toISOString().slice(0, 7);
-    const monthLabel = new Date(currentMonth + '-01').toLocaleString('default', { month: 'long', year: 'numeric' });
+    if (!salary) {
+        return (
+            <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14,
+                padding: '16px 20px', borderRadius: sharpRadius, marginBottom: 32,
+                background: '#f8fafc',
+                border: `1px solid ${borderColor}`,
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <AlertTriangle size={20} color="#d97706" />
+                    </div>
+                    <div>
+                        <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#92400e' }}>
+                            Salary not generated for {monthLabel}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: '#b45309', marginTop: 2 }}>
+                            Faculty is active but no salary record exists for this month.
+                        </div>
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    onClick={onGenerate}
+                    disabled={generating}
+                    className="btn btn-primary btn-sm"
+                    style={{ height: 36, whiteSpace: 'nowrap', gap: 8 }}
+                >
+                    {generating ? <Loader2 size={14} className="spin" /> : <Banknote size={14} />}
+                    Generate {monthLabel} Salary
+                </button>
+            </div>
+        );
+    }
+
     const isPaid = salary.status === 'Paid';
 
     return (
@@ -58,7 +92,7 @@ const CurrentMonthBanner = ({ salary }) => {
                         </>
                     )}
                 </div>
-                <div style={{ fontSize: '0.8rem', color: isPaid ? '#059669' : '#b45309', marginTop: 6, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ fontSize: '0.8rem', color: isPaid ? 'var(--erp-primary)' : '#b45309', marginTop: 6, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         <Banknote size={14} /> Net: <strong>₹{salary.netSalary?.toLocaleString()}</strong>
                     </span>
@@ -80,7 +114,7 @@ const CurrentMonthBanner = ({ salary }) => {
     );
 };
 
-const TeacherPayrollConfigModal = ({ teacher, onClose, toast, API }) => {
+const TeacherPayrollConfigModal = ({ teacher, onClose, onSave, toast, API }) => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
@@ -97,11 +131,12 @@ const TeacherPayrollConfigModal = ({ teacher, onClose, toast, API }) => {
         }
     });
 
+    const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
     const [currentMonthSalary, setCurrentMonthSalary] = useState(null);
 
     useEffect(() => {
         if (!teacher) return;
-        const currentMonth = new Date().toISOString().slice(0, 7);
+        const currentMonth = selectedMonth;
         Promise.all([
             API().get(`/payroll/profile/${teacher._id}`).catch(err => ({ err })),
             API().get(`/payroll/salaries?monthYear=${currentMonth}`).catch(() => ({ data: [] }))
@@ -122,7 +157,28 @@ const TeacherPayrollConfigModal = ({ teacher, onClose, toast, API }) => {
             const found = salaries.find(s => s.teacherId?._id === teacher._id || s.teacherId === teacher._id);
             setCurrentMonthSalary(found || false);
         }).finally(() => setLoading(false));
-    }, [teacher, API, toast]);
+    }, [teacher, API, toast, selectedMonth]);
+
+    const [generating, setGenerating] = useState(false);
+
+    const handleGenerate = async () => {
+        const monthYear = selectedMonth;
+        setGenerating(true);
+        try {
+            await API().post('/payroll/bulk-generate', { ids: [teacher._id], monthYear });
+            toast.success('Salary record generated successfully!');
+            // Refresh salary status
+            const salariesRes = await API().get(`/payroll/salaries?monthYear=${monthYear}`);
+            const salaries = salariesRes?.data || [];
+            const found = salaries.find(s => s.teacherId?._id === teacher._id || s.teacherId === teacher._id);
+            setCurrentMonthSalary(found || false);
+            if (onSave) onSave();
+        } catch (e) {
+            toast.error(e.response?.data?.message || 'Failed to generate salary');
+        } finally {
+            setGenerating(false);
+        }
+    };
 
     const handleProfileSubmit = async (e) => {
         e.preventDefault();
@@ -212,12 +268,35 @@ const TeacherPayrollConfigModal = ({ teacher, onClose, toast, API }) => {
                     </button>
                 </header>
 
+                <div style={{
+                    padding: '12px 32px', background: '#fff', borderBottom: `1px solid ${borderColor}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16
+                }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#64748b', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Calendar size={16} /> VIEW DATA FOR MONTH:
+                    </div>
+                    <input
+                        type="month"
+                        value={selectedMonth}
+                        onChange={e => setSelectedMonth(e.target.value)}
+                        style={{
+                            padding: '6px 14px', borderRadius: sharpRadius, border: `1.5px solid ${borderColor}`,
+                            fontWeight: 700, fontSize: '0.9rem', outline: 'none', background: '#f8fafc'
+                        }}
+                    />
+                </div>
+
                 <div style={{ flex: 1, overflowY: 'auto' }}>
                     <div style={{ width: '100%' }}>
 
                         <form onSubmit={handleProfileSubmit} style={{ background: '#fff', border: `1.5px solid ${borderColor}`, borderRadius: sharpRadius, padding: '40px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
 
-                            <CurrentMonthBanner salary={currentMonthSalary} />
+                            <CurrentMonthBanner
+                                salary={currentMonthSalary}
+                                onGenerate={handleGenerate}
+                                generating={generating}
+                                selectedMonth={selectedMonth}
+                            />
 
                             {/* --- SALARY SETTINGS --- */}
                             <SectionDivider label="Salary Settings" color="#059669" icon={Banknote} />

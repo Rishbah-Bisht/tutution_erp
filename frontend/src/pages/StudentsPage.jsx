@@ -12,8 +12,8 @@ import StudentFilters from '../components/students/StudentFilters';
 import StudentTable from '../components/students/StudentTable';
 import StudentFormModal from '../components/students/StudentFormModal';
 import StudentProfileModal from '../components/students/StudentProfileModal';
+import ActionModal from '../components/common/ActionModal';
 import BulkImportModal from '../components/students/BulkImportModal';
-import DeleteAllModal from '../components/students/DeleteAllModal';
 
 import { API_BASE_URL } from '../api/apiConfig';
 
@@ -54,6 +54,17 @@ const StudentsPage = () => {
     const [bulkResults, setBulkResults] = useState(null);
     const [err, setErr] = useState('');
     const [toasts, setToasts] = useState([]);
+
+    // Action Modal States
+    const [actionState, setActionState] = useState({
+        isOpen: false,
+        type: 'verify',
+        title: '',
+        desc: '',
+        onConfirm: null,
+        loading: false,
+        error: ''
+    });
 
     const addToast = (msg, type = 'success') => {
         const id = Date.now();
@@ -126,6 +137,36 @@ const StudentsPage = () => {
     const saveStudent = async e => {
         e.preventDefault();
         if (step === 1 && modal === 'admission') { setStep(2); return; }
+
+        // If updating, require password
+        if (selectedStudent?._id) {
+            setActionState({
+                isOpen: true,
+                type: 'verify',
+                title: 'Verify Update',
+                desc: `You areUpdating records for "${selectedStudent.name}". Please enter admin password to authorize these changes.`,
+                onConfirm: (pwd) => confirmStudentUpdate(pwd),
+                loading: false,
+                error: ''
+            });
+            return;
+        }
+
+        // Fresh admission (no password required for adding)
+        performStudentSave();
+    };
+
+    const confirmStudentUpdate = async (pwd) => {
+        setActionState(prev => ({ ...prev, loading: true, error: '' }));
+        try {
+            await performStudentSave(pwd);
+            setActionState(prev => ({ ...prev, isOpen: false }));
+        } catch (e) {
+            setActionState(prev => ({ ...prev, loading: false, error: e.response?.data?.message || 'Update failed' }));
+        }
+    };
+
+    const performStudentSave = async (pwd = '') => {
         setSaving(true); setErr('');
         try {
             const formData = new FormData();
@@ -134,6 +175,8 @@ const StudentsPage = () => {
                     formData.append(key, form[key]);
                 }
             });
+
+            if (pwd) formData.append('adminPassword', pwd);
 
             if (selectedStudent?._id) {
                 await API().put(`/students/${selectedStudent._id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
@@ -144,30 +187,50 @@ const StudentsPage = () => {
             }
             setModal(null); loadData();
         } catch (e) {
-            setErr(e.response?.data?.message || 'Save failed');
-            addToast(e.response?.data?.message || 'Save failed', 'error');
+            setErr(e.response?.data?.message || 'Operation failed');
+            if (!pwd) addToast(e.response?.data?.message || 'Operation failed', 'error'); // Only toast if not handled by action modal
+            throw e; // Re-throw to be caught by confirmStudentUpdate if applicable
         } finally { setSaving(false); }
     };
 
-    const deleteStudent = async (id) => {
-        const pwd = window.prompt('Enter Admin Password to confirm deletion:');
-        if (!pwd) return;
-        try {
-            await API().delete(`/students/${id}`, { data: { adminPassword: pwd } });
-            addToast('Student deleted');
-            loadData();
-        } catch (e) { addToast(e.response?.data?.message || 'Delete failed', 'error'); }
+    const toggleStudentStatus = (s) => {
+        const isCurrentlyActive = s.status === 'active';
+        const newStatus = isCurrentlyActive ? 'inactive' : 'active';
+
+        setActionState({
+            isOpen: true,
+            type: isCurrentlyActive ? 'danger' : 'verify',
+            title: isCurrentlyActive ? 'Deactivate Student' : 'Activate Student',
+            desc: `Enter admin password to ${isCurrentlyActive ? 'deactivate' : 'activate'} "${s.name}".`,
+            onConfirm: (pwd) => confirmStatusToggle(s, newStatus, pwd),
+            loading: false,
+            error: ''
+        });
     };
 
-    const deleteAll = async (pwd) => {
-        if (!pwd) { setErr('Password required'); return; }
-        setSaving(true);
+    const confirmStatusToggle = async (student, newStatus, pwd) => {
+        setActionState(prev => ({ ...prev, loading: true, error: '' }));
+        try {
+            await API().put(`/students/${student._id}`, { status: newStatus, adminPassword: pwd });
+            addToast(`Student ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully`);
+            setActionState(prev => ({ ...prev, isOpen: false }));
+            loadData();
+        } catch (e) {
+            setActionState(prev => ({ ...prev, loading: false, error: e.response?.data?.message || 'Authorization failed' }));
+        }
+    };
+
+    const confirmDeleteAll = async (pwd) => {
+        setActionState(prev => ({ ...prev, loading: true, error: '' }));
         try {
             await API().delete('/students/delete-all', { data: { adminPassword: pwd } });
-            addToast('All students deleted');
-            setModal(null); loadData();
-        } catch (e) { setErr(e.response?.data?.message || 'Action failed'); }
-        finally { setSaving(false); }
+            addToast('All students deleted successfully');
+            setActionState(prev => ({ ...prev, isOpen: false }));
+            setModal(null);
+            loadData();
+        } catch (e) {
+            setActionState(prev => ({ ...prev, loading: false, error: e.response?.data?.message || 'Authorization failed' }));
+        }
     };
 
     const exportData = (type) => {
@@ -404,7 +467,15 @@ const StudentsPage = () => {
                     search={search} setSearch={(val) => { setSearch(val); setPage(1); }}
                     filters={filters} setFilters={(f) => { setFilters(f); setPage(1); }}
                     batches={batches}
-                    onClearAll={() => { setModal('delete-all'); setAdminPassword(''); setErr(''); }}
+                    onClearAll={() => setActionState({
+                        isOpen: true,
+                        type: 'danger',
+                        title: 'Purge Student Directory',
+                        desc: 'URGENT: This will delete ALL student records permanently. This action cannot be undone. Enter password to authorize bulk destruction.',
+                        onConfirm: confirmDeleteAll,
+                        loading: false,
+                        error: ''
+                    })}
                     onExport={() => exportData('csv')}
                 />
 
@@ -427,7 +498,7 @@ const StudentsPage = () => {
                         });
                         setStep(1); setModal('admission');
                     }}
-                    onDelete={deleteStudent}
+                    onToggleStatus={toggleStudentStatus}
                     page={page} setPage={setPage}
                     totalPages={totalPages}
                     total={total}
@@ -463,6 +534,15 @@ const StudentsPage = () => {
                         setBulkResults(data);
                         addToast(`${data.success} students imported!`);
                         loadData();
+
+                        // If all students added successfully, close modal after a short delay
+                        if (data.failed === 0) {
+                            setTimeout(() => {
+                                setModal(null);
+                                setBulkFile([]);
+                                setBulkResults(null);
+                            }, 1500);
+                        }
                     } catch (e) { addToast('Bulk upload failed', 'error'); }
                     finally { setSaving(false); }
                 }}
@@ -470,11 +550,15 @@ const StudentsPage = () => {
                 addToast={addToast}
             />
 
-            <DeleteAllModal
-                isOpen={modal === 'delete-all'}
-                onClose={() => setModal(null)}
-                adminPassword={adminPassword} setAdminPassword={setAdminPassword}
-                saving={saving} onConfirm={deleteAll} err={err}
+            <ActionModal
+                isOpen={actionState.isOpen}
+                onClose={() => setActionState(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={actionState.onConfirm}
+                title={actionState.title}
+                description={actionState.desc}
+                actionType={actionState.type}
+                loading={actionState.loading}
+                error={actionState.error}
             />
         </ERPLayout>
     );

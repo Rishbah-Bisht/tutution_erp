@@ -15,18 +15,30 @@ const settingsRoutes = require('./routes/settings.routes');
 const teacherRoutes = require('./routes/teacher.routes');
 const teacherPayrollRoutes = require('./routes/teacher.payroll.routes');
 const expenseRoutes = require('./routes/expense.routes');
+const eventRoutes = require('./routes/event.routes');
+const notificationRoutes = require('./routes/notification.routes');
+const examRoutes = require('./routes/exam.routes');
 
-const { initFeeScheduler, initSalaryScheduler } = require('./utils/scheduler');
+const { initFeeScheduler, initSalaryScheduler, initReminderScheduler } = require('./utils/scheduler');
+const { startWorker: startNotificationWorker } = require('./services/notificationQueue');
 // Portal auth routes
 const studentAuthRoutes = require('./routes/student.auth.routes');
 const teacherAuthRoutes = require('./routes/teacher.auth.routes');
 
 const app = express();
 
-// Schedulers don't work in Vercel serverless — only start in local dev
+// Schedulers and Workers
+if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+    startNotificationWorker();
+    console.log('[NotificationQueue] Background worker initialized with Gmail credentials.');
+} else {
+    console.warn('[NotificationQueue] Warning: GMAIL_USER or GMAIL_APP_PASSWORD not set. Emails will be queued but not sent.');
+}
+
 if (process.env.NODE_ENV !== 'production') {
     initFeeScheduler();
     initSalaryScheduler();
+    initReminderScheduler();
 }
 
 // Middleware
@@ -49,7 +61,8 @@ app.use(cors({
     },
     credentials: true
 }));
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ limit: '5mb', extended: true }));
 
 // Global security middleware
 const cleanObj = (obj) => {
@@ -96,6 +109,9 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/teachers', teacherRoutes);
 app.use('/api/payroll', teacherPayrollRoutes);
 app.use('/api/expenses', expenseRoutes);
+app.use('/api/events', eventRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/exams', examRoutes);
 
 // Portal auth routes
 app.use('/api/student', studentAuthRoutes);

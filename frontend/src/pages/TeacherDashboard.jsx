@@ -55,10 +55,11 @@ const TeacherDashboard = () => {
                     {tabs.map(tab => (
                         <button
                             key={tab.id}
-                            className={`nav - item ${activeTab === tab.id ? 'active' : ''}`}
+                            className={`nav-item ${activeTab === tab.id ? 'active' : ''}`}
                             onClick={() => setActiveTab(tab.id)}
+                            style={{ borderLeft: activeTab === tab.id ? '3px solid var(--erp-teacher)' : '' }}
                         >
-                            <tab.icon size={18} />
+                            <tab.icon size={18} style={{ color: activeTab === tab.id ? 'var(--erp-teacher)' : '' }} />
                             <span>{tab.label}</span>
                         </button>
                     ))}
@@ -111,7 +112,7 @@ const TeacherDashboard = () => {
                                 <div className="card lg:col-span-2">
                                     <div className="p-5 border-b flex items-center justify-between">
                                         <h3 className="font-bold flex items-center gap-2">
-                                            <BookOpen size={18} className="text-blue-500" />
+                                            <BookOpen size={18} className="text-emerald-500" />
                                             My Assignments
                                         </h3>
                                         <span className="badge badge-info">{profileData?.teacher?.assignments?.length || 0} Batches</span>
@@ -182,6 +183,7 @@ const TeacherDashboard = () => {
                                             <button
                                                 onClick={() => setActiveTab('salary')}
                                                 className="btn-primary w-full"
+                                                style={{ background: 'var(--erp-teacher)', borderColor: 'var(--erp-teacher)' }}
                                             >
                                                 Manage Payout
                                             </button>

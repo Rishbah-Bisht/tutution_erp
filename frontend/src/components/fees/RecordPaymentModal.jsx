@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    X, CreditCard, CheckCircle2, AlertCircle, Loader2, 
+import {
+    X, CreditCard, CheckCircle2, AlertCircle, Loader2,
     IndianRupee, Banknote, ShieldCheck, Wallet, Landmark,
     Smartphone, Receipt, Info, Tag, Globe
 } from 'lucide-react';
@@ -13,7 +13,7 @@ const borderColor = '#e2e8f0';
 const labelColor = '#475569';
 const headingColor = '#0f172a';
 
-const SectionDivider = ({ label, color = '#059669', icon: Icon }) => (
+const SectionDivider = ({ label, color = 'var(--erp-primary)', icon: Icon }) => (
     <div style={{
         fontSize: '0.72rem', fontWeight: 800, color, textTransform: 'uppercase',
         letterSpacing: '0.1em', marginBottom: 20, marginTop: 10,
@@ -64,35 +64,35 @@ const RecordPaymentModal = ({ fee, onClose, onSave }) => {
     const remainingBalance = fee.pendingAmount || 0;
 
     return (
-        <div 
-            className="modal-overlay" 
-            style={{ 
-                position: 'fixed', 
-                inset: 0, 
-                background: 'rgba(15, 23, 42, 0.7)', 
-                backdropFilter: 'blur(4px)', 
-                zIndex: 1000, 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                padding: '20px' 
-            }} 
+        <div
+            className="modal-overlay"
+            style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(15, 23, 42, 0.7)',
+                backdropFilter: 'blur(4px)',
+                zIndex: 1000,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '20px'
+            }}
             onClick={onClose}
         >
-            <div 
-                className="modal" 
-                style={{ 
-                    width: '100%', 
-                    maxWidth: '900px', 
-                    maxHeight: '92vh', 
-                    background: '#f8fafc', 
-                    borderRadius: '12px', 
-                    overflow: 'hidden', 
-                    display: 'flex', 
-                    flexDirection: 'column', 
+            <div
+                className="modal"
+                style={{
+                    width: '100%',
+                    maxWidth: '900px',
+                    maxHeight: '92vh',
+                    background: '#f8fafc',
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column',
                     boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
                     position: 'relative'
-                }} 
+                }}
                 onClick={e => e.stopPropagation()}
             >
                 {/* --- TOP BAR (Inside Modal Box) --- */}
@@ -114,7 +114,7 @@ const RecordPaymentModal = ({ fee, onClose, onSave }) => {
                         <div style={{
                             width: 52, height: 52, borderRadius: '8px',
                             background: 'rgba(255,255,255,0.1)', overflow: 'hidden',
-                            border: '1px solid rgba(255,255,255,0.2)', display: 'flex', 
+                            border: '1px solid rgba(255,255,255,0.2)', display: 'flex',
                             alignItems: 'center', justifyContent: 'center', flexShrink: 0
                         }}>
                             <CreditCard size={24} color="#fff" />
@@ -142,7 +142,7 @@ const RecordPaymentModal = ({ fee, onClose, onSave }) => {
 
                 <div style={{ flex: 1, overflowY: 'auto' }}>
                     <form onSubmit={handleSubmit} style={{ background: '#fff' }}>
-                        
+
                         {/* --- BILL SUMMARY (MATCHING IMAGE 2) --- */}
                         <div style={{ padding: '24px 32px', background: '#f8fafc', borderBottom: `1px solid ${borderColor}` }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
@@ -156,12 +156,12 @@ const RecordPaymentModal = ({ fee, onClose, onSave }) => {
                                 {fee.registrationFee > 0 && (
                                     <div style={{ fontSize: '0.8rem', color: accentBlue }}>One-time Registration: <span style={{ fontWeight: 700 }}>+ ₹{(fee.registrationFee || 0).toLocaleString()}</span></div>
                                 )}
-                                <div style={{ fontSize: '0.8rem', color: '#059669' }}>Previously Collected: <span style={{ fontWeight: 700 }}>- ₹{(fee.amountPaid || 0).toLocaleString()}</span></div>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--erp-primary)' }}>Previously Collected: <span style={{ fontWeight: 700 }}>- ₹{(fee.amountPaid || 0).toLocaleString()}</span></div>
                             </div>
 
-                            <div style={{ 
-                                display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
-                                paddingTop: 16, borderTop: `1px solid ${borderColor}` 
+                            <div style={{
+                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                paddingTop: 16, borderTop: `1px solid ${borderColor}`
                             }}>
                                 <div style={{ fontSize: '0.8rem', fontWeight: 900, color: accentBlue, textTransform: 'uppercase' }}>REMAINING TO PAY</div>
                                 <div style={{ fontSize: '1.5rem', fontWeight: 900, color: accentBlue }}>₹{remainingBalance.toLocaleString()}</div>
@@ -228,7 +228,7 @@ const RecordPaymentModal = ({ fee, onClose, onSave }) => {
 
                             <div className="mf" style={{ marginBottom: 24 }}>
                                 <label style={{ fontSize: '0.7rem', fontWeight: 800, color: labelColor, display: 'block', marginBottom: 8 }}>TRANSACTION ID / REF #</label>
-                                <input 
+                                <input
                                     type="text" placeholder="Optional identifier"
                                     style={{ borderRadius: sharpRadius, padding: '12px', border: `1px solid ${borderColor}`, background: '#fcfdfd', width: '100%' }}
                                     value={form.transactionId}
@@ -266,14 +266,14 @@ const RecordPaymentModal = ({ fee, onClose, onSave }) => {
                                     Discard
                                 </button>
                                 <button type="submit" disabled={saving}
-                                    style={{ 
-                                        flex: 2, 
-                                        background: saving ? '#94a3b8' : '#001f3f', 
-                                        color: '#fff', borderRadius: sharpRadius, padding: '14px', fontWeight: 900, border: 'none', 
-                                        cursor: saving ? 'not-allowed' : 'pointer', 
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, 
+                                    style={{
+                                        flex: 2,
+                                        background: saving ? '#94a3b8' : '#001f3f',
+                                        color: '#fff', borderRadius: sharpRadius, padding: '14px', fontWeight: 900, border: 'none',
+                                        cursor: saving ? 'not-allowed' : 'pointer',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
                                         fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em',
-                                        boxShadow: saving ? 'none' : '0 4px 12px rgba(0,0,0,0.2)' 
+                                        boxShadow: saving ? 'none' : '0 4px 12px rgba(0,0,0,0.2)'
                                     }}>
                                     {saving ? <Loader2 size={18} className="spin" /> : <ShieldCheck size={18} />}
                                     Finalize Payment

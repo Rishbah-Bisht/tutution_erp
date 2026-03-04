@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, Plus, DollarSign, Wallet, Building, ArrowRightLeft, FileText, ChevronLeft, Calendar, User, Phone, Mail, MapPin, Building2, CreditCard, Landmark, CheckCircle2, XCircle, Clock, Loader2, QrCode, Banknote, ShieldCheck } from 'lucide-react';
+import { Trash2, Plus, DollarSign, Wallet, Building, ArrowRightLeft, FileText, ChevronLeft, Calendar, User, Phone, Mail, MapPin, Building2, CreditCard, Landmark, CheckCircle, XCircle, Clock, Loader2, QrCode, Banknote, ShieldCheck, AlertTriangle, Save, History } from 'lucide-react';
 import apiClient, { API_BASE_URL } from '../../api/apiConfig';
 
 // --- Theme Constants ---
-const primaryColor = 'var(--erp-primary)'; // Consistent with your ERP primary color
-const headerGradient = 'linear-gradient(135deg, #064e3b 0%, #065f46 100%)';
+const primaryColor = 'var(--erp-primary)';
+const headerGradient = 'linear-gradient(135deg, var(--erp-primary) 0%, var(--erp-secondary) 100%)';
 const sharpRadius = '4px';
 const borderColor = '#e2e8f0';
 const labelColor = '#475569';

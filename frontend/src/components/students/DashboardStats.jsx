@@ -9,14 +9,14 @@ const DashboardStats = ({ stats }) => {
             icon: Users,
             iconClass: 'ic-blue',
             textClass: 'text-blue-600',
-           
+
         },
         {
             label: 'Active Now',
             value: stats.active,
             icon: UserCheck,
-            iconClass: 'ic-green',
-            textClass: 'text-green-600',
+            iconClass: 'ic-indigo',
+            textClass: 'text-indigo-600',
             sub: 'Across all batches'
         },
         {
@@ -33,8 +33,8 @@ const DashboardStats = ({ stats }) => {
             value: stats.newAdmissions,
             icon: Calendar,
             iconClass: 'ic-indigo',
-             sub: 'New student this month',
-            subClass: 'text-green-600'
+            sub: 'New student this month',
+            subClass: 'text-indigo-600'
         }
     ];
 

@@ -85,7 +85,7 @@ const ExpenseTable = ({
                                 </td>
                                 <td>
                                     <div className="text-sm font-extrabold text-slate-800">₹{fmt(exp.amount)}</div>
-                                    <div className={`text-[10px] uppercase font-bold ${exp.status === 'Pending' ? 'text-orange-500' : 'text-emerald-600'}`}>{exp.status}</div>
+                                    <div className={`text-[10px] uppercase font-bold ${exp.status === 'Pending' ? 'text-orange-500' : 'text-indigo-600'}`}>{exp.status}</div>
                                 </td>
                                 <td className="text-right !pr-6">
                                     <div className="flex justify-end gap-1">
@@ -96,7 +96,7 @@ const ExpenseTable = ({
                                         >
                                             <Eye size={14} />
                                         </button>
-                                        
+
                                         {exp.receiptUrl && (
                                             <button
                                                 className="btn btn-ghost btn-outline btn-sm !text-purple-600"
@@ -108,11 +108,17 @@ const ExpenseTable = ({
                                         )}
                                         {exp.status === 'Pending' && (
                                             <button
-                                                className="btn btn-ghost btn-outline btn-sm !text-emerald-500 hover:bg-emerald-50"
+                                                className="btn btn-sm"
                                                 title="Mark as Paid"
                                                 onClick={() => onMarkPaid(exp._id)}
+                                                style={{
+                                                    background: '#ecfdf5', border: '1px solid #10b981',
+                                                    color: '#059669', display: 'flex', alignItems: 'center',
+                                                    justifyContent: 'center', width: 32, height: 32, padding: 0,
+                                                    borderRadius: '4px'
+                                                }}
                                             >
-                                                <CheckCircle size={14} />
+                                                <CheckCircle size={16} fill="#059669" color="#fff" strokeWidth={1.5} />
                                             </button>
                                         )}
                                     </div>

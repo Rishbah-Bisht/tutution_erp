@@ -3,7 +3,7 @@ import {
     X, User, ShieldCheck, Phone, Mail, MapPin, Calendar,
     Briefcase, BookOpen, GraduationCap, IndianRupee,
     Award, Users, Clock, CreditCard, Building2, CheckCircle,
-    Banknote, Edit3, UserCircle2, ChevronRight, AlertCircle, 
+    Banknote, Edit3, UserCircle2, ChevronRight, AlertCircle,
     Hash, Globe, Smartphone
 } from 'lucide-react';
 
@@ -36,10 +36,10 @@ const TeacherProfileModal = ({ teacher, onClose, fmt, imgSrc, API }) => {
 
     if (!teacher) return null;
 
-    // Professional Sharp Theme Colors (Emerald/Slate)
-    const primaryColor = '#059669';
+    // Professional Sharp Theme Colors (Dynamic from CSS variables)
+    const primaryColor = 'var(--erp-teacher)';
     const borderColor = '#e2e8f0';
-    const sharpRadius = '10px'; // Sharp professional radius
+    const sharpRadius = '2px'; // Ultra sharp professional radius
 
     return (
         <div className="modal-overlay modal-full-overlay" style={{ background: 'rgba(15, 23, 42, 0.8)', backdropFilter: 'blur(4px)' }} onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -79,7 +79,7 @@ const TeacherProfileModal = ({ teacher, onClose, fmt, imgSrc, API }) => {
 
                 <div className="modal-body" style={{ padding: '40px', overflowY: 'auto', flex: 1 }}>
                     <div style={{ maxWidth: '1300px', margin: '0 auto' }}>
-                        
+
                         {/* --- TOP PROFILE HEADER CARD --- */}
                         <div style={{
                             background: '#fff',
@@ -128,9 +128,9 @@ const TeacherProfileModal = ({ teacher, onClose, fmt, imgSrc, API }) => {
                                         </span>
                                     </div>
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px 32px', color: '#64748b', fontSize: '0.8rem', fontWeight: 600 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Mail size={14} class="text-emerald-500" /> {teacher.email || 'N/A'}</div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Smartphone size={14} class="text-emerald-500" /> {teacher.phone || 'N/A'}</div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Hash size={14} class="text-emerald-500" /> REG: {teacher.regNo || '—'}</div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Mail size={14} className="text-emerald-500" /> {teacher.email || 'N/A'}</div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Smartphone size={14} className="text-emerald-500" /> {teacher.phone || 'N/A'}</div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Hash size={14} className="text-emerald-500" /> REG: {teacher.regNo || '—'}</div>
                                     </div>
                                 </div>
 
@@ -279,7 +279,7 @@ const TeacherProfileModal = ({ teacher, onClose, fmt, imgSrc, API }) => {
                     </div>
                 </div>
 
-                
+
             </div>
         </div>
     );

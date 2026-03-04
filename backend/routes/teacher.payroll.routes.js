@@ -21,4 +21,7 @@ router.get('/salaries', payrollController.getAllSalaries);
 // 4. Payments
 router.post('/pay/:salaryRecordId', verifyAdminPassword, payrollController.markSalaryPaid);
 
+// 5. Bulk Operations
+router.post('/bulk-generate', verifyAdminPassword, payrollController.bulkGenerateSalaries);
+
 module.exports = router;

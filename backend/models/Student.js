@@ -18,7 +18,7 @@ const studentSchema = new mongoose.Schema({
     className: { type: String },        // Course/Class
     admissionDate: { type: Date, default: Date.now },
     session: { type: String },        // e.g. 2026-2027
-    status: { type: String, enum: ['active', 'inactive', 'completed'], default: 'active', index: true },
+    status: { type: String, enum: ['active', 'inactive', 'completed', 'batch_pending'], default: 'active', index: true },
     notes: { type: String },
     profileImage: { type: String },        // Relative path to upload
     // ── Template specific additions ────────────────────────────────

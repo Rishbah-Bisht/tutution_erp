@@ -413,32 +413,32 @@ const ExpensesPage = () => {
                 isOpen={showDetails}
                 onClose={() => setShowDetails(false)}
                 expense={detailExpense}
+                onMarkPaid={(id) => {
+                    setShowDetails(false);
+                    handleMarkPaidClick(id);
+                }}
             />
 
             <ActionModal
                 isOpen={showDel}
                 title="Delete Expense Record"
-                subTitle="This will permanently remove this financial record from the database."
-                confirmText="Permanently Delete"
-                actionType="danger"
+                description="This will permanently remove this financial record from the database. This action cannot be undone."
+                actionType="delete"
                 onClose={() => setShowDel(false)}
                 onConfirm={confirmDelete}
                 loading={delLoading}
                 error={delError}
-                requirePassword={true}
             />
 
             <ActionModal
                 isOpen={showPay}
                 title="Mark Expense as Paid"
-                subTitle="Please enter the admin password to verify this payment."
-                confirmText="Mark as Paid"
-                actionType="success"
+                description="Please enter the admin password to verify this payment and update the status of this expense."
+                actionType="verify"
                 onClose={() => setShowPay(false)}
                 onConfirm={confirmPay}
                 loading={payLoading}
                 error={payError}
-                requirePassword={true}
             />
 
         </ERPLayout>

@@ -86,7 +86,7 @@ const AnalyticsDashboard = ({ data }) => {
                     <Icon className={`w-6 h-6 ${colorClass.replace('bg-', 'text-')}`} />
                 </div>
                 {trend !== undefined && (
-                    <div className={`flex items-center text-xs font-bold ${trend >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    <div className={`flex items-center text-xs font-bold ${trend >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>
                         {trend >= 0 ? <ArrowUpRight size={14} className="mr-1" /> : <ArrowDownRight size={14} className="mr-1" />}
                         {Math.abs(trend)}%
                     </div>
@@ -109,7 +109,7 @@ const AnalyticsDashboard = ({ data }) => {
                     title="Total Earnings"
                     value={summary.totalEarnings}
                     icon={TrendingUp}
-                    colorClass="bg-emerald-500"
+                    colorClass="bg-indigo-500"
                 />
                 <Card
                     title="Total Expenses"
@@ -144,7 +144,7 @@ const AnalyticsDashboard = ({ data }) => {
                                     contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
                                 />
                                 <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
-                                <Bar dataKey="Earnings" fill="#10b981" radius={[6, 6, 0, 0]} barSize={60} />
+                                <Bar dataKey="Earnings" fill="#6366f1" radius={[6, 6, 0, 0]} barSize={60} />
                                 <Bar dataKey="Expenses" fill="#ef4444" radius={[6, 6, 0, 0]} barSize={60} />
                             </BarChart>
                         </ResponsiveContainer>
@@ -204,7 +204,7 @@ const AnalyticsDashboard = ({ data }) => {
                         </div>
                         <div>
                             <p className="text-slate-400 text-sm mb-1 uppercase tracking-wider font-bold">Monthly Income</p>
-                            <p className="text-xl font-black text-emerald-400">₹{summary.monthlyEarnings.toLocaleString()}</p>
+                            <p className="text-xl font-black text-indigo-400">₹{summary.monthlyEarnings.toLocaleString()}</p>
                             <p className="text-sm italic opacity-60">current month</p>
                         </div>
                         <div>

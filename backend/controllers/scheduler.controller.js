@@ -125,7 +125,8 @@ exports.autoSchedule = async (req, res) => {
 
 // POST /api/scheduler/auto-batch
 // Fully automated: Takes a batchId, looks at its subjects, 
-// finds an available room, an available teacher, and generates the time slots.
+// finds an available room, finds assigned teachers for each subject, 
+// and generates the time slots with teacher names.
 exports.autoScheduleBatch = async (req, res) => {
     try {
         const { batchId } = req.body;
@@ -134,151 +135,134 @@ exports.autoScheduleBatch = async (req, res) => {
         const batch = await Batch.findById(batchId);
         if (!batch) return res.status(404).json({ message: 'Batch not found.' });
 
-        // 1. Determine slots needed
         const subjects = batch.subjects || [];
-        const slotsNeeded = subjects.length > 0 ? subjects.length : 5;
+        if (subjects.length === 0) return res.status(400).json({ message: 'Batch has no subjects assigned.' });
 
-        // 2. Fetch config (Rooms)
+        // 1. Fetch config (Rooms)
         const admin = await Admin.findOne().select('roomsAvailable');
         const roomCount = parseInt(admin?.roomsAvailable) || 5;
         const classrooms = Array.from({ length: roomCount }, (_, i) => `Room ${i + 1}`);
 
-        // 3. Fetch active teachers
-        const teachers = await Teacher.find({ status: 'active' }).select('name assignments');
-
-        // 4. Fetch all other batch schedules to check occupancy
-        const allBatches = await Batch.find({
+        // 2. Fetch all other batch schedules to check occupancy
+        const allOtherBatches = await Batch.find({
             _id: { $ne: batchId },
             schedule: { $exists: true, $ne: [] }
-        }).select('classroom teacher schedule');
+        }).select('classroom schedule');
 
-        // Build occupancy map: occupancy[roomName] = Set of "Day-Time"
+        // Build room occupancy map
         const roomOccupancy = {};
         classrooms.forEach(c => roomOccupancy[c] = new Set());
+        allOtherBatches.forEach(b => {
+            if (b.classroom && roomOccupancy[b.classroom]) {
+                b.schedule?.forEach(s => roomOccupancy[b.classroom].add(`${s.day}-${s.time}`));
+            }
+        });
 
-        // Build teacher occupancy map: teacherOccupancy[teacherName] = Set of "Day-Time"
+        // 3. Fetch all active teachers to check their availability
+        const teachers = await Teacher.find({ status: 'active' });
         const teacherOccupancy = {};
         teachers.forEach(t => teacherOccupancy[t.name] = new Set());
 
+        const otherBatchesWithTeachers = await Batch.find({
+            _id: { $ne: batchId },
+            schedule: { $exists: true, $ne: [] }
+        }).select('schedule');
+
+        // Note: For teacher occupancy, we must check ALL batches (including those from other rooms)
+        const allBatches = await Batch.find({ schedule: { $exists: true, $ne: [] } }).select('schedule');
         allBatches.forEach(b => {
             b.schedule?.forEach(s => {
-                const slotStr = `${s.day}-${s.time}`;
-                if (b.classroom && roomOccupancy[b.classroom]) {
-                    roomOccupancy[b.classroom].add(slotStr);
-                }
-                if (b.teacher && teacherOccupancy[b.teacher]) {
-                    teacherOccupancy[b.teacher].add(slotStr);
+                if (s.teacher && teacherOccupancy[s.teacher]) {
+                    teacherOccupancy[s.teacher].add(`${s.day}-${s.time}`);
                 }
             });
         });
 
         const timeSlots = buildTimeSlots();
         let selectedRoom = null;
-        let selectedSchedule = null;
-        let availableSlotsForRoom = [];
+        let generatedEntries = [];
 
-        // 5. Find a room that has enough free slots
+        // 4. Algorithm: Find a room, then for each subject, find a slot and a teacher
+        // We iterate classrooms one by one
         for (const room of classrooms) {
-            const freeSlots = [];
-            for (const day of DAYS) {
-                for (const time of timeSlots) {
-                    if (!roomOccupancy[room].has(`${day}-${time}`)) {
-                        freeSlots.push({ day, time });
+            let tempEntries = [];
+            let currentRoomOccupancy = new Set(roomOccupancy[room]);
+            let currentTeacherOccupancy = JSON.parse(JSON.stringify(
+                Object.fromEntries(Object.entries(teacherOccupancy).map(([k, v]) => [k, Array.from(v)]))
+            ));
+            // Convert back to sets
+            Object.keys(currentTeacherOccupancy).forEach(k => currentTeacherOccupancy[k] = new Set(currentTeacherOccupancy[k]));
+
+            let possible = true;
+
+            for (const subject of subjects) {
+                // Find a teacher who is assigned to this batch and subject
+                const potentialTeachers = teachers.filter(t =>
+                    t.assignments?.some(a =>
+                        (a.batchId?.toString() === batchId.toString() || a.batchName === batch.name) &&
+                        a.subjects?.includes(subject)
+                    )
+                );
+
+                if (potentialTeachers.length === 0) {
+                    // Fallback: any teacher who can teach this subject generally (if we had subject expertise in model)
+                    // For now, if no one is assigned, we might have to stop or pick "Unassigned"
+                }
+
+                const teacherToUse = potentialTeachers.length > 0 ? potentialTeachers[0] : null;
+                const teacherName = teacherToUse ? teacherToUse.name : 'Unassigned';
+
+                // Find a slot where BOTH room and teacher are free
+                let foundSlot = false;
+                for (const day of DAYS) {
+                    for (const time of timeSlots) {
+                        const slotKey = `${day}-${time}`;
+                        const roomFree = !currentRoomOccupancy.has(slotKey);
+                        const teacherFree = teacherName === 'Unassigned' || !currentTeacherOccupancy[teacherName].has(slotKey);
+
+                        if (roomFree && teacherFree) {
+                            tempEntries.push({ day, time, subject, teacher: teacherName });
+                            currentRoomOccupancy.add(slotKey);
+                            if (teacherName !== 'Unassigned') currentTeacherOccupancy[teacherName].add(slotKey);
+                            foundSlot = true;
+                            break;
+                        }
                     }
+                    if (foundSlot) break;
+                }
+
+                if (!foundSlot) {
+                    possible = false;
+                    break;
                 }
             }
-            if (freeSlots.length >= slotsNeeded) {
+
+            if (possible) {
                 selectedRoom = room;
-                availableSlotsForRoom = freeSlots;
+                generatedEntries = tempEntries;
                 break;
             }
         }
 
         if (!selectedRoom) {
-            return res.status(400).json({ message: 'No classroom has enough available slots to accommodate this batch.' });
+            return res.status(400).json({ message: 'Could not find a conflict-free schedule for all subjects in any room with assigned teachers.' });
         }
 
-        // 6. Algorithm to pick slots (same logic as before)
-        const schedule = [];
-        const daysUsed = new Set();
-
-        let chosenConsistentTime = null;
-        let bestDayCoverage = 0;
-
-        for (const time of timeSlots) {
-            let matchingDays = availableSlotsForRoom.filter(s => s.time === time);
-            if (matchingDays.length > bestDayCoverage) {
-                bestDayCoverage = matchingDays.length;
-                chosenConsistentTime = time;
-            }
-        }
-
-        if (chosenConsistentTime) {
-            for (const slot of availableSlotsForRoom) {
-                if (schedule.length >= slotsNeeded) break;
-                if (slot.time === chosenConsistentTime && !daysUsed.has(slot.day)) {
-                    schedule.push(slot);
-                    daysUsed.add(slot.day);
-                }
-            }
-        }
-
-        for (const slot of availableSlotsForRoom) {
-            if (schedule.length >= slotsNeeded) break;
-            if (!daysUsed.has(slot.day)) {
-                schedule.push(slot);
-                daysUsed.add(slot.day);
-            }
-        }
-
-        for (const slot of availableSlotsForRoom) {
-            if (schedule.length >= slotsNeeded) break;
-            const alreadySelected = schedule.some(s => s.day === slot.day && s.time === slot.time);
-            if (!alreadySelected) {
-                schedule.push(slot);
-            }
-        }
-
-        selectedSchedule = schedule;
-
-        // 7. Find a teacher available during these exact slots
-        let selectedTeacher = null;
-
-        for (const teacher of teachers) {
-            let isAvailable = true;
-            for (const slot of selectedSchedule) {
-                if (teacherOccupancy[teacher.name].has(`${slot.day}-${slot.time}`)) {
-                    isAvailable = false;
-                    break;
-                }
-            }
-            if (isAvailable) {
-                selectedTeacher = teacher.name;
-                break;
-            }
-        }
-
-        if (!selectedTeacher) {
-            // Fallback: Just give the first active teacher and let admin handle conflicts later
-            selectedTeacher = teachers.length > 0 ? teachers[0].name : 'Unassigned';
-        }
-
-        // Sort schedule chronologically
+        // Sort entries
         const dayOrder = Object.fromEntries(DAYS.map((d, i) => [d, i]));
-        selectedSchedule.sort((a, b) => {
-            if (dayOrder[a.day] !== dayOrder[b.day]) {
-                return dayOrder[a.day] - dayOrder[b.day];
-            }
+        generatedEntries.sort((a, b) => {
+            if (dayOrder[a.day] !== dayOrder[b.day]) return dayOrder[a.day] - dayOrder[b.day];
             return a.time.localeCompare(b.time);
         });
 
         return res.json({
-            schedule: selectedSchedule,
+            schedule: generatedEntries,
             classroom: selectedRoom,
-            teacher: selectedTeacher
+            // For the summary teacher, we pick the most frequent or first one
+            teacher: generatedEntries[0]?.teacher || 'Unassigned'
         });
 
     } catch (err) {
-        res.status(500).json({ message: 'Server error during auto-schedule batch', error: err.message });
+        res.status(500).json({ message: 'Server error during batch auto-schedule', error: err.message });
     }
 };
