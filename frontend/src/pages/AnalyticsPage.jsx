@@ -4,12 +4,7 @@ import ERPLayout from '../components/ERPLayout';
 import AnalyticsDashboard from '../components/AnalyticsDashboard';
 import { Loader2, AlertCircle, RefreshCcw } from 'lucide-react';
 
-import { API_BASE_URL } from '../api/apiConfig';
-
-const API = () => axios.create({
-    baseURL: `${API_BASE_URL}/api`,
-    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-});
+import apiClient from '../api/apiConfig';
 
 const AnalyticsPage = () => {
     const [data, setData] = useState([]);
@@ -23,8 +18,8 @@ const AnalyticsPage = () => {
             // Fetch both earnings (fees) and expenses
             // Using large limits to get a broader view for analytics
             const [feesRes, expensesRes] = await Promise.all([
-                API().get('/fees', { params: { limit: 1000 } }),
-                API().get('/expenses', { params: { limit: 1000 } })
+                apiClient.get('/fees', { params: { limit: 1000 } }),
+                apiClient.get('/expenses', { params: { limit: 1000 } })
             ]);
 
             const feesData = (feesRes.data?.fees || []).map(f => ({
@@ -71,7 +66,13 @@ const AnalyticsPage = () => {
 
     return (
         <ERPLayout title="Financial Analytics">
-            <div className="page-hdr">
+            <style>{`
+                @media (max-width: 640px) {
+                    .ana-hdr { flex-direction: column !important; align-items: flex-start !important; gap: 16px !important; }
+                    .ana-hdr button { width: 100% !important; justify-content: center !important; }
+                }
+            `}</style>
+            <div className="page-hdr ana-hdr">
                 <div>
                     <h1>Business Intelligence</h1>
                     <p>Real-time insights across tuition earnings and operational expenses.</p>

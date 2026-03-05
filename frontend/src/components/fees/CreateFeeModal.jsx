@@ -1,13 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Receipt, User, Calendar, IndianRupee, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
-import axios from 'axios';
-
-import { API_BASE_URL } from '../../api/apiConfig';
-
-const API = () => axios.create({
-    baseURL: `${API_BASE_URL}/api`,
-    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-});
+import apiClient from '../../api/apiConfig';
 
 const CreateFeeModal = ({ onClose, onSave }) => {
     const [students, setStudents] = useState([]);
@@ -38,7 +31,7 @@ const CreateFeeModal = ({ onClose, onSave }) => {
         const fetchInitialData = async () => {
             try {
                 const [bRes] = await Promise.all([
-                    API().get('/batches')
+                    apiClient.get('/batches')
                 ]);
                 setStudents([]); // Start with empty list
                 setBatches(bRes.data.batches || []);
@@ -73,7 +66,7 @@ const CreateFeeModal = ({ onClose, onSave }) => {
 
             setSearching(true);
             try {
-                const res = await API().get(`/students?search=${encodeURIComponent(searchQuery)}&limit=15`);
+                const res = await apiClient.get(`/students?search=${encodeURIComponent(searchQuery)}&limit=15`);
                 setStudents(res.data.students || []);
             } catch (err) {
                 console.error("Failed to search students:", err);

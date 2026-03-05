@@ -15,12 +15,7 @@ import StudentProfileModal from '../components/students/StudentProfileModal';
 import ActionModal from '../components/common/ActionModal';
 import BulkImportModal from '../components/students/BulkImportModal';
 
-import { API_BASE_URL } from '../api/apiConfig';
-
-const API = () => axios.create({
-    baseURL: `${API_BASE_URL}/api`,
-    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-});
+import apiClient from '../api/apiConfig';
 
 const EMPTY_FORM = {
     name: '', dob: '', gender: 'Male', phone: '', email: '', address: '',
@@ -86,12 +81,12 @@ const StudentsPage = () => {
 
             const params = { page, search, batch: filters.batch, status: apiStatus, className: filters.className, limit };
 
-            let stuReq = API().get('/students', { params });
+            let stuReq = apiClient.get('/students', { params });
 
             const [stuRes, batchRes, statsRes] = await Promise.all([
                 stuReq,
-                API().get('/students/batches'),
-                API().get('/students/stats')
+                apiClient.get('/students/batches'),
+                apiClient.get('/students/stats')
             ]);
 
             if (page === 1) {
@@ -179,10 +174,10 @@ const StudentsPage = () => {
             if (pwd) formData.append('adminPassword', pwd);
 
             if (selectedStudent?._id) {
-                await API().put(`/students/${selectedStudent._id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+                await apiClient.put(`/students/${selectedStudent._id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
                 addToast('Student updated successfully');
             } else {
-                await API().post('/students', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+                await apiClient.post('/students', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
                 addToast('Student admitted successfully');
             }
             setModal(null); loadData();
@@ -211,7 +206,7 @@ const StudentsPage = () => {
     const confirmStatusToggle = async (student, newStatus, pwd) => {
         setActionState(prev => ({ ...prev, loading: true, error: '' }));
         try {
-            await API().put(`/students/${student._id}`, { status: newStatus, adminPassword: pwd });
+            await apiClient.put(`/students/${student._id}`, { status: newStatus, adminPassword: pwd });
             addToast(`Student ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully`);
             setActionState(prev => ({ ...prev, isOpen: false }));
             loadData();
@@ -223,7 +218,7 @@ const StudentsPage = () => {
     const confirmDeleteAll = async (pwd) => {
         setActionState(prev => ({ ...prev, loading: true, error: '' }));
         try {
-            await API().delete('/students/delete-all', { data: { adminPassword: pwd } });
+            await apiClient.delete('/students/delete-all', { data: { adminPassword: pwd } });
             addToast('All students deleted successfully');
             setActionState(prev => ({ ...prev, isOpen: false }));
             setModal(null);
@@ -460,7 +455,7 @@ const StudentsPage = () => {
                 </div>
             </div>
 
-            <DashboardStats stats={stats} />
+            <DashboardStats stats={stats} loading={loading} />
 
             <div className="card mt-6">
                 <StudentFilters
@@ -530,7 +525,7 @@ const StudentsPage = () => {
                 onConfirm={async () => {
                     setSaving(true);
                     try {
-                        const { data } = await API().post('/students/bulk', { students: bulkFile });
+                        const { data } = await apiClient.post('/students/bulk', { students: bulkFile });
                         setBulkResults(data);
                         addToast(`${data.success} students imported!`);
                         loadData();

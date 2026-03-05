@@ -16,10 +16,10 @@ const StudentFilters = ({
         <div style={{
             display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px',
             background: '#fff', border: '1px solid var(--erp-border)', borderRadius: 'var(--radius-md)',
-            marginBottom: 20, boxShadow: 'var(--shadow-sm)'
+            marginBottom: 20, boxShadow: 'var(--shadow-sm)', flexWrap: 'wrap'
         }}>
             <div style={{
-                position: 'relative', display: 'flex', alignItems: 'center', flex: 1, maxWidth: 300
+                position: 'relative', display: 'flex', alignItems: 'center', flex: '1 1 300px'
             }}>
                 <Search size={14} style={{ position: 'absolute', left: 12, color: 'var(--erp-muted)' }} />
                 <input
@@ -36,8 +36,8 @@ const StudentFilters = ({
                 />
             </div>
 
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginLeft: 'auto' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--erp-muted2)', fontSize: '0.8rem', fontWeight: 600, marginRight: 4 }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <div className="hide-mobile" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--erp-muted2)', fontSize: '0.8rem', fontWeight: 600, marginRight: 4 }}>
                     <Filter size={14} /> Filters:
                 </div>
                 <select
@@ -45,7 +45,7 @@ const StudentFilters = ({
                     value={filters.status}
                     onChange={e => setFilters({ ...filters, status: e.target.value })}
                 >
-                    <option value="">Status Filters</option>
+                    <option value="">Status</option>
                     <option value="all">All Records</option>
                     <option value="active">Active</option>
                     <option value="batch_pending">Batch Pending</option>
@@ -78,10 +78,6 @@ const StudentFilters = ({
                         .map(b => <option key={b._id} value={b._id}>{b.name}</option>)}
                 </select>
 
-
-
-                <div style={{ width: 1, height: 20, background: 'var(--erp-border)', margin: '0 4px' }}></div>
-
                 <button
                     onClick={onClearAll}
                     style={{
@@ -93,7 +89,7 @@ const StudentFilters = ({
                     onMouseOver={(e) => e.currentTarget.style.background = '#fee2e2'}
                     onMouseOut={(e) => e.currentTarget.style.background = 'var(--erp-danger-light)'}
                 >
-                    <Trash size={13} /> Clear All
+                    <Trash size={13} /> Purge
                 </button>
             </div>
         </div>

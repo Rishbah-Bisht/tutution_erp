@@ -1,12 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { X, BookOpen, Loader2 } from 'lucide-react';
-import { API_BASE_URL } from '../../api/apiConfig';
-
-const API = () => axios.create({
-    baseURL: `${API_BASE_URL}/api`,
-    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-});
+import apiClient from '../../api/apiConfig';
 
 const CreateTestModal = ({ onClose, onSave }) => {
     const [batches, setBatches] = useState([]);
@@ -14,12 +9,12 @@ const CreateTestModal = ({ onClose, onSave }) => {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [form, setForm] = useState({
-        name: '', batchId: '', subject: '',
+        name: '', batchId: '', subject: '', chapter: '',
         totalMarks: 100, passingMarks: 40, date: ''
     });
 
     useEffect(() => {
-        API().get('/batches').then(({ data }) => setBatches(data.batches || []));
+        apiClient.get('/batches').then(({ data }) => setBatches(data.batches || []));
     }, []);
 
     const handleBatchChange = (batchId) => {
@@ -33,7 +28,7 @@ const CreateTestModal = ({ onClose, onSave }) => {
         setSaving(true);
         setError('');
         try {
-            await API().post('/exams', form);
+            await apiClient.post('/exams', form);
             onSave();
         } catch (err) {
             setError(err.response?.data?.message || 'Failed to create test.');
@@ -64,10 +59,17 @@ const CreateTestModal = ({ onClose, onSave }) => {
                     {error && <div className="alert alert-error" style={{ marginBottom: 16 }}>{error}</div>}
 
                     <div style={{ display: 'grid', gap: 16 }}>
-                        <div className="mf">
-                            <label>Test Name *</label>
-                            <input type="text" placeholder="e.g. Mid-Term Unit Test 1" value={form.name}
-                                onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+                        <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14 }}>
+                            <div className="mf">
+                                <label>Test Name *</label>
+                                <input type="text" placeholder="e.g. Unit Test 1" value={form.name}
+                                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+                            </div>
+                            <div className="mf">
+                                <label>Chapter *</label>
+                                <input type="text" placeholder="e.g. Trigonometry" value={form.chapter}
+                                    onChange={e => setForm(f => ({ ...f, chapter: e.target.value }))} required />
+                            </div>
                         </div>
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>

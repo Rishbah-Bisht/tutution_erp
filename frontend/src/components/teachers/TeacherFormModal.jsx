@@ -15,6 +15,8 @@ const borderColor = '#e2e8f0';
 const labelColor = '#475569';
 const headingColor = '#0f172a';
 
+import apiClient from '../../api/apiConfig';
+
 // --- Internal UI Components ---
 
 const AlertMessage = ({ type, message, style }) => {
@@ -40,15 +42,15 @@ const AlertMessage = ({ type, message, style }) => {
 };
 
 
-const SubjectPicker = ({ subjects, selected, onToggle, batchId, teacherId, API }) => {
+const SubjectPicker = ({ subjects, selected, onToggle, batchId, teacherId }) => {
     const [conflicts, setConflicts] = useState({});
 
     useEffect(() => {
         const q = teacherId ? `?excludeTeacherId=${teacherId}` : '';
-        API().get(`/batches/${batchId}/subjects${q}`)
+        apiClient.get(`/batches/${batchId}/subjects${q}`)
             .then(({ data }) => setConflicts(data.assignments || {}))
             .catch(() => { });
-    }, [batchId, teacherId, API]);
+    }, [batchId, teacherId]);
 
     return (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -76,7 +78,7 @@ const SubjectPicker = ({ subjects, selected, onToggle, batchId, teacherId, API }
     );
 };
 
-const TeacherFormModal = ({ mode, teacher, batches, toast, onSave, onClose, API, imgSrc }) => {
+const TeacherFormModal = ({ mode, teacher, batches, toast, onSave, onClose, imgSrc }) => {
     const [tab, setTab] = useState(0);
     const [saving, setSaving] = useState(false);
     const [err, setErr] = useState('');
@@ -173,7 +175,7 @@ const TeacherFormModal = ({ mode, teacher, batches, toast, onSave, onClose, API,
     const doCreate = async () => {
         setSaving(true); setErr('');
         try {
-            await API().post('/teachers', buildFormData(), { headers: { 'Content-Type': 'multipart/form-data' } });
+            await apiClient.post('/teachers', buildFormData(), { headers: { 'Content-Type': 'multipart/form-data' } });
             toast.success(`Teacher "${name}" registered successfully!`);
             onSave();
         } catch (e) { setErr(e.response?.data?.message || 'Save failed'); }
@@ -185,7 +187,7 @@ const TeacherFormModal = ({ mode, teacher, batches, toast, onSave, onClose, API,
         try {
             const fd = buildFormData();
             fd.append('adminPassword', password);
-            await API().put(`/teachers/${teacher._id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+            await apiClient.put(`/teachers/${teacher._id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
             toast.success(`Records updated for ${name}`);
             setPwdModal(false);
             onSave();
@@ -213,6 +215,17 @@ const TeacherFormModal = ({ mode, teacher, batches, toast, onSave, onClose, API,
             backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex',
             alignItems: 'center', justifyContent: 'center', padding: '20px'
         }}>
+            <style>{`
+                @media (max-width: 640px) {
+                    .t-modal-header { padding: 16px 20px !important; }
+                    .t-form-body { padding: 20px !important; }
+                    .t-tabs-container { margin-bottom: 20px !important; overflow-x: auto !important; justify-content: flex-start !important; }
+                    .t-tab-btn { padding: 12px 10px !important; min-width: 120px !important; }
+                    .t-photo-wrap { flex-direction: column !important; gap: 16px !important; text-align: center !important; }
+                    .t-footer { flex-direction: column-reverse !important; gap: 12px !important; margin-top: 24px !important; }
+                    .t-footer button { width: 100% !important; justify-content: center !important; }
+                }
+            `}</style>
             <div className="modal" style={{
                 width: '100%', maxWidth: '900px', maxHeight: '92vh',
                 background: '#f8fafc', borderRadius: '12px', overflow: 'hidden',
@@ -221,7 +234,7 @@ const TeacherFormModal = ({ mode, teacher, batches, toast, onSave, onClose, API,
             }}>
 
                 {/* --- TOP BAR (Inside Modal Box) --- */}
-                <header style={{
+                <header className="t-modal-header" style={{
                     width: '100%',
                     padding: '24px 32px',
                     background: '#0f172a',
@@ -234,7 +247,7 @@ const TeacherFormModal = ({ mode, teacher, batches, toast, onSave, onClose, API,
                     overflow: 'hidden'
                 }}>
                     {/* Decorative Large Icon in Background */}
-                    <UserCircle2 size={140} style={{ position: 'absolute', right: 40, top: '50%', transform: 'translateY(-50%)', opacity: 0.1, color: '#fff' }} />
+                    <UserCircle2 size={140} style={{ position: 'absolute', right: 40, top: '50%', transform: 'translateY(-50%)', opacity: 0.1, color: '#fff' }} className="hide-mobile" />
 
                     <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 16 }}>
                         <div style={{
@@ -242,15 +255,15 @@ const TeacherFormModal = ({ mode, teacher, batches, toast, onSave, onClose, API,
                             background: 'rgba(255,255,255,0.1)', overflow: 'hidden',
                             border: '1px solid rgba(255,255,255,0.2)', display: 'flex',
                             alignItems: 'center', justifyContent: 'center', flexShrink: 0
-                        }}>
+                        }} className="hide-mobile">
                             <GraduationCap size={24} color="#fff" />
                         </div>
                         <div>
-                            <h2 style={{ fontSize: '1.4rem', fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>
-                                {mode === 'edit' ? 'Modify Teacher Record' : 'Faculty Onboarding'}
+                            <h2 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>
+                                {mode === 'edit' ? 'Update Teacher' : 'New Faculty'}
                             </h2>
-                            <div style={{ fontSize: '0.8rem', opacity: 0.85, fontWeight: 500, marginTop: 2 }}>
-                                {mode === 'edit' ? `Employee Identification: ${teacher?.regNo}` : 'Teacher Registration Portal'}
+                            <div style={{ fontSize: '0.75rem', opacity: 0.85, fontWeight: 500, marginTop: 2 }}>
+                                {mode === 'edit' ? `ID: ${teacher?.regNo}` : 'Registration Portal'}
                             </div>
                         </div>
                     </div>
@@ -262,16 +275,17 @@ const TeacherFormModal = ({ mode, teacher, batches, toast, onSave, onClose, API,
                         cursor: 'pointer', display: 'flex', alignItems: 'center',
                         gap: 8, fontSize: '0.75rem', fontWeight: 700
                     }}>
-                        <X size={16} /> CLOSE
+                        <X size={16} /> <span className="hide-mobile">CLOSE</span>
                     </button>
                 </header>
 
                 <div style={{ flex: 1, overflowY: 'auto' }}>
 
                     {/* Progress Tabs - Simple Style */}
-                    <div style={{ display: 'flex', border: `1.5px solid ${borderColor}`, borderRadius: sharpRadius, background: '#fff', marginBottom: 40, overflow: 'hidden' }}>
+                    <div className="t-tabs-container" style={{ display: 'flex', border: `1.5px solid ${borderColor}`, borderRadius: sharpRadius, background: '#fff', marginBottom: 40, overflow: 'hidden' }}>
                         {tabs.map((t, i) => (
                             <button key={i} type="button" onClick={() => setTab(i)}
+                                className="t-tab-btn"
                                 style={{
                                     flex: 1, padding: '16px 12px', border: 'none', background: tab === i ? '#f8fafc' : '#fff',
                                     color: tab === i ? primaryColor : '#94a3b8', cursor: 'pointer',
@@ -285,14 +299,14 @@ const TeacherFormModal = ({ mode, teacher, batches, toast, onSave, onClose, API,
                         ))}
                     </div>
 
-                    <form onSubmit={handleSubmit} style={{ background: '#fff', border: `1.5px solid ${borderColor}`, borderRadius: sharpRadius, padding: '40px' }}>
+                    <form onSubmit={handleSubmit} className="t-form-body" style={{ background: '#fff', border: `1.5px solid ${borderColor}`, borderRadius: sharpRadius, padding: '40px' }}>
                         {err && <AlertMessage type="error" message={err} style={{ marginBottom: 32 }} />}
 
                         {/* --- TAB 1: PERSONAL --- */}
                         {tab === 0 && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
-                                <div style={{ display: 'flex', gap: 32, alignItems: 'center', pb: 8 }}>
-                                    <div style={{ position: 'relative' }}>
+                                <div style={{ display: 'flex', gap: 32, alignItems: 'center', pb: 8 }} className="t-photo-wrap">
+                                    <div style={{ position: 'relative', flexShrink: 0 }}>
                                         <div style={{ width: 110, height: 110, borderRadius: sharpRadius, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `2px dashed ${borderColor}`, overflow: 'hidden' }}>
                                             {imgPreview ? <img src={imgPreview} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" /> : <User size={48} color="#cbd5e1" />}
                                         </div>
@@ -303,7 +317,7 @@ const TeacherFormModal = ({ mode, teacher, batches, toast, onSave, onClose, API,
                                     </div>
                                     <div style={{ flex: 1 }}>
                                         <h4 style={{ margin: '0 0 4px 0', fontSize: '1rem', fontWeight: 800, color: headingColor }}>Faculty Portrait</h4>
-                                        <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b', lineHeight: 1.5 }}>Please upload a clear, high-resolution photo for the faculty ID and digital profile.</p>
+                                        <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b', lineHeight: 1.5 }}>Upload high-resolution photo for ID and profile.</p>
                                     </div>
                                 </div>
 
@@ -397,7 +411,6 @@ const TeacherFormModal = ({ mode, teacher, batches, toast, onSave, onClose, API,
                                                     onToggle={sub => toggleSubject(a.batchId, sub)}
                                                     batchId={a.batchId}
                                                     teacherId={teacher?._id}
-                                                    API={API}
                                                 />
                                             </div>
                                         </div>
@@ -465,7 +478,7 @@ const TeacherFormModal = ({ mode, teacher, batches, toast, onSave, onClose, API,
                         )}
 
                         {/* --- FORM ACTIONS --- */}
-                        <div style={{ marginTop: 48, paddingTop: 32, borderTop: `1.5px solid ${borderColor}`, display: 'flex', justifyContent: 'space-between' }}>
+                        <div className="t-footer" style={{ marginTop: 48, paddingTop: 32, borderTop: `1.5px solid ${borderColor}`, display: 'flex', justifyContent: 'space-between' }}>
                             <button type="button" onClick={() => tab > 0 ? setTab(tab - 1) : onClose()}
                                 style={{
                                     padding: '12px 24px', background: '#fff', border: `1.5px solid ${borderColor}`,

@@ -1,14 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import ERPLayout from '../components/ERPLayout';
-import { Bell, RefreshCw, Filter, Send, Mail, CheckCircle, Clock, AlertTriangle, ChevronLeft, ChevronRight, Check } from 'lucide-react';
-import { API_BASE_URL } from '../api/apiConfig';
+import {
+    Bell, RefreshCw, Filter, Send, Mail, CheckCircle, Clock,
+    AlertTriangle, ChevronLeft, ChevronRight, Check, Search
+} from 'lucide-react';
+import apiClient from '../api/apiConfig';
 import NotificationModal from '../components/notifications/NotificationModal';
-
-const API = () => axios.create({
-    baseURL: `${API_BASE_URL}/api`,
-    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-});
 
 const NotificationHistoryPage = () => {
     const [notifications, setNotifications] = useState([]);
@@ -28,13 +26,14 @@ const NotificationHistoryPage = () => {
     const fetchHistory = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await API().get('/notifications/history', {
+            const res = await apiClient.get('/notifications/history', {
                 params: { page, ...filters }
             });
-            setNotifications(res.data.notifications);
-            setTotalPages(res.data.pages);
+            setNotifications(res.data.notifications || []);
+            setTotalPages(res.data.pages || 1);
         } catch (err) {
             console.error('Failed to fetch notification history:', err);
+            addToast("Failed to load history", "error");
         } finally {
             setLoading(false);
         }
@@ -54,16 +53,16 @@ const NotificationHistoryPage = () => {
     };
 
     return (
-        <ERPLayout title="Email Notification History">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        <ERPLayout title="Notification History">
+            <div className="page-container">
 
-                {/* HEADER ACTIONS */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
-                    <div style={{ display: 'flex', gap: 12 }}>
+                {/* RESPONSIVE HEADER */}
+                <div className="header-section">
+                    <div className="filter-group">
                         <select
+                            className="mobile-full-width"
                             value={filters.status}
                             onChange={(e) => { setFilters({ ...filters, status: e.target.value }); setPage(1); }}
-                            style={{ padding: '8px 12px', borderRadius: '4px', border: '1px solid #e2e8f0', fontSize: '0.85rem' }}
                         >
                             <option value="">All Statuses</option>
                             <option value="sent">Sent</option>
@@ -71,111 +70,96 @@ const NotificationHistoryPage = () => {
                             <option value="failed">Failed</option>
                         </select>
                         <select
+                            className="mobile-full-width"
                             value={filters.type}
                             onChange={(e) => { setFilters({ ...filters, type: e.target.value }); setPage(1); }}
-                            style={{ padding: '8px 12px', borderRadius: '4px', border: '1px solid #e2e8f0', fontSize: '0.85rem' }}
                         >
                             <option value="">All Types</option>
                             <option value="registration">Registration</option>
                             <option value="fee_generated">Fee Generated</option>
                             <option value="fee_reminder">Fee Reminder</option>
-                            <option value="exam">Exam Announcement</option>
-                            <option value="holiday">Holiday Notice</option>
                         </select>
-                        <button onClick={fetchHistory} style={{ padding: '8px 12px', borderRadius: '4px', border: '1px solid #e2e8f0', background: '#fff' }}>
-                            <RefreshCw size={16} className={loading ? 'spin' : ''} />
+                        <button onClick={fetchHistory} className="refresh-btn">
+                            <RefreshCw size={18} className={loading ? 'spin' : ''} />
                         </button>
                     </div>
 
-                    <button
-                        className="btn-primary"
-                        onClick={() => setIsModalOpen(true)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--erp-primary)', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '4px', fontWeight: 800, cursor: 'pointer' }}
-                    >
-                        <Send size={16} /> SEND CUSTOM ALERT
+                    <button className="send-btn" onClick={() => setIsModalOpen(true)}>
+                        <Send size={18} /> <span>SEND ALERT</span>
                     </button>
                 </div>
 
-                {/* TABLE */}
-                <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                    <table className="erp-table">
-                        <thead>
-                            <tr>
-                                <th>Recipient</th>
-                                <th>Subject</th>
-                                <th>Type</th>
-                                <th>Queued At</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {loading && notifications.length === 0 ? (
-                                <tr><td colSpan="5" style={{ textAlign: 'center', padding: '40px' }}>Loading history...</td></tr>
-                            ) : notifications.length === 0 ? (
-                                <tr><td colSpan="5" style={{ textAlign: 'center', padding: '40px' }}>No notifications found.</td></tr>
-                            ) : (
-                                notifications.map(n => {
-                                    const st = getStatusStyles(n.status);
-                                    return (
-                                        <tr key={n._id}>
-                                            <td>
-                                                <div style={{ fontWeight: 800, color: '#1e293b' }}>{n.recipientName}</div>
-                                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{n.recipientEmail}</div>
-                                            </td>
-                                            <td><div style={{ maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.subject}</div></td>
-                                            <td>
-                                                <span style={{
-                                                    padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 800,
-                                                    background: '#f1f5f9', color: '#475569', textTransform: 'uppercase'
-                                                }}>
-                                                    {n.type.replace('_', ' ')}
-                                                </span>
-                                            </td>
-                                            <td>{new Date(n.createdAt).toLocaleString()}</td>
-                                            <td>
-                                                <span style={{
-                                                    display: 'inline-flex', alignItems: 'center', gap: 4,
-                                                    padding: '4px 10px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 900,
-                                                    background: st.bg, color: st.color, textTransform: 'uppercase'
-                                                }}>
-                                                    {st.icon} {n.status}
-                                                </span>
-                                                {n.status === 'failed' && n.lastError && (
-                                                    <div style={{ marginTop: 6, fontSize: '0.7rem', color: '#dc2626', maxWidth: 220, whiteSpace: 'normal', lineHeight: 1.3, fontWeight: 600 }}>
-                                                        Reason: {n.lastError}
-                                                    </div>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    );
-                                })
-                            )}
-                        </tbody>
-                    </table>
+                {/* TABLE / MOBILE CARD VIEW */}
+                <div className="content-card">
+                    <div className="table-wrapper">
+                        <table className="erp-table">
+                            <thead>
+                                <tr>
+                                    <th>Recipient</th>
+                                    <th>Subject</th>
+                                    <th>Type</th>
+                                    <th className="hide-mobile">Queued At</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {loading && notifications.length === 0 ? (
+                                    <tr><td colSpan="5" className="status-cell">Loading...</td></tr>
+                                ) : notifications.length === 0 ? (
+                                    <tr><td colSpan="5" className="status-cell">No notifications found.</td></tr>
+                                ) : (
+                                    notifications.map(n => {
+                                        const st = getStatusStyles(n.status);
+                                        return (
+                                            <tr key={n._id}>
+                                                <td>
+                                                    <div className="recipient-name">{n.recipientName}</div>
+                                                    <div className="recipient-email">{n.recipientEmail}</div>
+                                                </td>
+                                                <td><div className="truncate-text">{n.subject}</div></td>
+                                                <td>
+                                                    <span className="type-badge">
+                                                        {n.type.replace('_', ' ')}
+                                                    </span>
+                                                </td>
+                                                <td className="hide-mobile">{new Date(n.createdAt).toLocaleDateString()}</td>
+                                                <td>
+                                                    <span className="status-badge" style={{ background: st.bg, color: st.color }}>
+                                                        {st.icon} {n.status}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* MOBILE-ONLY CARD VIEW (Alternative to Table if desired, 
+                        or keep table with overflow: auto as implemented here) */}
 
                     {/* PAGINATION */}
-                    <div style={{ padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9' }}>
-                        <div style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                    <div className="pagination-footer">
+                        <span className="page-info">
                             Page <strong>{page}</strong> of <strong>{totalPages}</strong>
-                        </div>
-                        <div style={{ display: 'flex', gap: 8 }}>
+                        </span>
+                        <div className="pagination-controls">
                             <button
                                 disabled={page === 1 || loading}
                                 onClick={() => setPage(p => p - 1)}
                                 className="pag-btn"
-                            ><ChevronLeft size={16} /></button>
+                            ><ChevronLeft size={20} /></button>
                             <button
                                 disabled={page === totalPages || loading}
                                 onClick={() => setPage(p => p + 1)}
                                 className="pag-btn"
-                            ><ChevronRight size={16} /></button>
+                            ><ChevronRight size={20} /></button>
                         </div>
                     </div>
                 </div>
-
             </div>
 
-            {/* MODAL */}
             <NotificationModal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
@@ -183,25 +167,172 @@ const NotificationHistoryPage = () => {
             />
 
             {/* TOASTS */}
-            <div className="toast-container" style={{ position: 'fixed', bottom: 24, right: 24, display: 'flex', flexDirection: 'column', gap: 12, zIndex: 9999 }}>
+            <div className="toast-container">
                 {toasts.map(t => (
-                    <div key={t.id} style={{
-                        padding: '12px 24px', borderRadius: '4px', background: t.type === 'error' ? '#dc2626' : '#059669', color: '#fff',
-                        display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', fontWeight: 800, fontSize: '0.85rem'
-                    }}>
-                        {t.type === 'error' ? <AlertTriangle size={16} /> : <Check size={16} />}
+                    <div key={t.id} className={`toast ${t.type}`}>
+                        {t.type === 'error' ? <AlertTriangle size={18} /> : <Check size={18} />}
                         {t.msg}
                     </div>
                 ))}
             </div>
 
             <style>{`
-                .pag-btn {
-                    padding: 8px; border: 1px solid #e2e8f0; background: #fff; border-radius: 4px; cursor: pointer; color: #64748b;
+                .page-container {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 20px;
+                    padding: 10px;
                 }
-                .pag-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+                .header-section {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: 16px;
+                    flex-wrap: wrap;
+                }
+
+                .filter-group {
+                    display: flex;
+                    gap: 10px;
+                    flex: 1;
+                    min-width: 300px;
+                }
+
+                .filter-group select {
+                    padding: 10px;
+                    border-radius: 6px;
+                    border: 1px solid #e2e8f0;
+                    flex: 1;
+                    font-size: 0.9rem;
+                    background: white;
+                }
+
+                .refresh-btn {
+                    padding: 10px;
+                    border-radius: 6px;
+                    border: 1px solid #e2e8f0;
+                    background: white;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                }
+
+                .send-btn {
+                    background: #2563eb;
+                    color: white;
+                    border: none;
+                    padding: 12px 20px;
+                    border-radius: 6px;
+                    font-weight: 700;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    white-space: nowrap;
+                }
+
+                .content-card {
+                    background: white;
+                    border-radius: 8px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                    overflow: hidden;
+                }
+
+                .table-wrapper {
+                    overflow-x: auto; /* This enables horizontal swipe on mobile */
+                    -webkit-overflow-scrolling: touch;
+                }
+
+                .erp-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    min-width: 600px; /* Ensures table doesn't squish too much */
+                }
+
+                .erp-table th, .erp-table td {
+                    text-align: left;
+                    padding: 16px;
+                    border-bottom: 1px solid #f1f5f9;
+                }
+
+                .recipient-name { font-weight: 700; color: #1e293b; }
+                .recipient-email { font-size: 0.8rem; color: #64748b; }
+
+                .truncate-text {
+                    max-width: 180px;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+
+                .type-badge {
+                    padding: 4px 8px;
+                    background: #f1f5f9;
+                    border-radius: 4px;
+                    font-size: 0.7rem;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                }
+
+                .status-badge {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                    padding: 6px 10px;
+                    border-radius: 20px;
+                    font-size: 0.75rem;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                }
+
+                .pagination-footer {
+                    padding: 16px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+
+                .toast-container {
+                    position: fixed;
+                    bottom: 20px;
+                    right: 20px;
+                    left: 20px; /* Full width on mobile */
+                    display: flex;
+                    flex-direction: column;
+                    gap: 10px;
+                    pointer-events: none;
+                }
+
+                .toast {
+                    padding: 16px;
+                    border-radius: 8px;
+                    color: white;
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    font-weight: 600;
+                    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+                    pointer-events: auto;
+                    max-width: 400px;
+                    margin-left: auto;
+                }
+
+                .toast.success { background: #059669; }
+                .toast.error { background: #dc2626; }
+
                 .spin { animation: spin 1s linear infinite; }
                 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+                /* MOBILE BREAKPOINTS */
+                @media (max-width: 640px) {
+                    .header-section { flex-direction: column; align-items: stretch; }
+                    .filter-group { flex-direction: row; min-width: unset; }
+                    .send-btn { justify-content: center; width: 100%; order: -1; } /* Button on top for mobile */
+                    .hide-mobile { display: none; }
+                    .truncate-text { max-width: 120px; }
+                    .toast { margin: 0; width: 100%; }
+                }
             `}</style>
         </ERPLayout>
     );

@@ -68,22 +68,33 @@ app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ limit: '5mb', extended: true }));
 
 // Global security middleware
-const cleanObj = (obj) => {
-    if (!obj || typeof obj !== 'object') return obj;
+const cleanObj = (obj, seen = new WeakSet()) => {
+    if (!obj || typeof obj !== 'object' || seen.has(obj)) return obj;
+    seen.add(obj);
+
     for (const key in obj) {
-        if (key.startsWith('$') || key.includes('.')) {
-            const safeKey = key.replace(/^\$|\./g, '_');
-            obj[safeKey] = obj[key];
-            delete obj[key];
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            if (key.startsWith('$') || key.includes('.')) {
+                const safeKey = key.replace(/^\$|\./g, '_');
+                obj[safeKey] = obj[key];
+                delete obj[key];
+                if (typeof obj[safeKey] === 'object') cleanObj(obj[safeKey], seen);
+            } else if (typeof obj[key] === 'object') {
+                cleanObj(obj[key], seen);
+            }
         }
-        if (typeof obj[key] === 'object') cleanObj(obj[key]);
     }
     return obj;
 };
+
 app.use((req, res, next) => {
-    if (req.body) cleanObj(req.body);
-    if (req.query) cleanObj(req.query);
-    if (req.params) cleanObj(req.params);
+    try {
+        if (req.body) cleanObj(req.body);
+        if (req.query) cleanObj(req.query);
+        if (req.params) cleanObj(req.params);
+    } catch (err) {
+        console.error("CleanObj Error", err);
+    }
     next();
 });
 
@@ -99,11 +110,9 @@ app.use('/api', globalLimiter); // Apply to all /api routes
 // Serve uploaded teacher images
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Auth Routes
-app.use('/admin', adminRoutes);
-
-// API Routes (admin ERP)
-app.use('/api/admin', adminWorkRoutes);
+// API Routes
+app.use('/api/admin', adminRoutes); // Auth & basic profile
+app.use('/api/admin', adminWorkRoutes); // Work/Dashboard data
 app.use('/api/students', studentRoutes);
 app.use('/api/fees', feeRoutes);
 app.use('/api/batches', batchRoutes);
@@ -126,9 +135,24 @@ mongoose.connect(MONGODB_URI)
     .then(() => console.log('✅ Connected to MongoDB'))
     .catch(err => {
         console.error('❌ MongoDB connection error:', err);
-        // Explicitly log the URI (hiddenly if needed) or just the message
-        console.error('URI beginning:', MONGODB_URI.substring(0, 20) + '...');
     });
+
+// 404 Handler for API
+app.use('/api', (req, res) => {
+    res.status(404).json({ message: `Route ${req.originalUrl} not found` });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error(`[Global Error Handler] [${new Date().toISOString()}]`);
+    console.error('Path:', req.path);
+    console.error('Error:', err.stack || err.message);
+
+    res.status(err.status || 500).json({
+        message: err.message || 'Internal Server Error',
+        error: process.env.NODE_ENV === 'production' ? {} : (err.stack || err.message)
+    });
+});
 
 // Export for Vercel serverless
 module.exports = app;

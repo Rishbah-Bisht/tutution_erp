@@ -21,6 +21,8 @@ import NotificationHistoryPage from './pages/NotificationHistoryPage';
 import SettingsPage from './pages/SettingsPage';
 import ExamsPage from './pages/ExamsPage';
 
+import ProtectedRoute from './components/ProtectedRoute';
+
 function App() {
     useEffect(() => {
         // Set default values in case network fails - Match index.css charcoal theme
@@ -49,26 +51,26 @@ function App() {
                 <Route path="/login" element={<LoginPage />} />
 
                 {/* Admin Routes */}
-                <Route path="/dashboard" element={<AdminDashboard />} />
-                <Route path="/profile" element={<AdminProfilePage />} />
-                <Route path="/students" element={<StudentsPage />} />
-                <Route path="/students/:id" element={<StudentProfilePage />} />
-                <Route path="/fees" element={<FeesPage />} />
-                <Route path="/batches" element={<BatchesPage />} />
-                <Route path="/batches/:id" element={<BatchDetailsPage />} />
-                <Route path="/teachers" element={<TeachersPage />} />
-                <Route path="/payroll" element={<TeacherPayrollDashboard />} />
-                <Route path="/expenses" element={<ExpensesPage />} />
-                <Route path="/analytics" element={<AnalyticsPage />} />
-                <Route path="/notifications" element={<NotificationHistoryPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/exams" element={<ExamsPage />} />
+                <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
+                <Route path="/profile" element={<ProtectedRoute allowedRoles={['admin']}><AdminProfilePage /></ProtectedRoute>} />
+                <Route path="/students" element={<ProtectedRoute allowedRoles={['admin']}><StudentsPage /></ProtectedRoute>} />
+                <Route path="/students/:id" element={<ProtectedRoute allowedRoles={['admin']}><StudentProfilePage /></ProtectedRoute>} />
+                <Route path="/fees" element={<ProtectedRoute allowedRoles={['admin']}><FeesPage /></ProtectedRoute>} />
+                <Route path="/batches" element={<ProtectedRoute allowedRoles={['admin']}><BatchesPage /></ProtectedRoute>} />
+                <Route path="/batches/:id" element={<ProtectedRoute allowedRoles={['admin']}><BatchDetailsPage /></ProtectedRoute>} />
+                <Route path="/teachers" element={<ProtectedRoute allowedRoles={['admin']}><TeachersPage /></ProtectedRoute>} />
+                <Route path="/payroll" element={<ProtectedRoute allowedRoles={['admin']}><TeacherPayrollDashboard /></ProtectedRoute>} />
+                <Route path="/expenses" element={<ProtectedRoute allowedRoles={['admin']}><ExpensesPage /></ProtectedRoute>} />
+                <Route path="/analytics" element={<ProtectedRoute allowedRoles={['admin']}><AnalyticsPage /></ProtectedRoute>} />
+                <Route path="/notifications" element={<ProtectedRoute allowedRoles={['admin']}><NotificationHistoryPage /></ProtectedRoute>} />
+                <Route path="/settings" element={<ProtectedRoute allowedRoles={['admin']}><SettingsPage /></ProtectedRoute>} />
+                <Route path="/exams" element={<ProtectedRoute allowedRoles={['admin']}><ExamsPage /></ProtectedRoute>} />
 
                 {/* Teacher Routes */}
-                <Route path="/teacher-dashboard" element={<TeacherDashboard />} />
+                <Route path="/teacher-dashboard" element={<ProtectedRoute allowedRoles={['teacher']}><TeacherDashboard /></ProtectedRoute>} />
 
                 {/* Student Routes */}
-                <Route path="/student-dashboard" element={<StudentDashboard />} />
+                <Route path="/student-dashboard" element={<ProtectedRoute allowedRoles={['student']}><StudentDashboard /></ProtectedRoute>} />
 
                 {/* Fallback */}
                 <Route path="/" element={<Navigate to="/login" replace />} />

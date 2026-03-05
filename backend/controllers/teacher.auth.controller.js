@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { TeacherSalaryProfile } = require('../models/TeacherPayroll');
 
-const SECRET = process.env.JWT_SECRET || 'supersecretkey_for_erp_app';
+const { JWT_SECRET } = require('../middleware/auth.middleware');
 
 // ── POST /api/teacher/login ───────────────────────────────────────────────────
 exports.login = async (req, res) => {
@@ -20,7 +20,7 @@ exports.login = async (req, res) => {
         if (!valid)
             return res.status(401).json({ message: 'Invalid credentials' });
 
-        const token = jwt.sign({ id: teacher._id, role: 'teacher' }, SECRET, { expiresIn: '2h' });
+        const token = jwt.sign({ id: teacher._id, role: 'teacher' }, JWT_SECRET, { expiresIn: '2h' });
 
         const profile = teacher.toObject();
         delete profile.password;

@@ -1,19 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import ERPLayout from '../components/ERPLayout';
-import CreateTestModal from '../components/exams/CreateTestModal';
-import MarksEntryModal from '../components/exams/MarksEntryModal';
-import { API_BASE_URL } from '../api/apiConfig';
+import CreateTestModal from '../components/exams/CreateTestModal.jsx';
+import MarksEntryModal from '../components/exams/MarksEntryModal.jsx';
+import apiClient from '../api/apiConfig';
 import {
     BookOpen, Plus, ClipboardList, Trophy, Edit3,
     Trash2, Loader2, AlertCircle, CheckCircle2, XCircle,
-    ChevronRight, Clock
+    ChevronRight, Clock, Award, Star, Sparkles
 } from 'lucide-react';
-
-const API = () => axios.create({
-    baseURL: `${API_BASE_URL}/api`,
-    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-});
 
 const statusBadge = (status) => {
     const map = {
@@ -42,14 +36,23 @@ const ExamsPage = () => {
     const [results, setResults] = useState([]);
     const [resultsLoading, setResultsLoading] = useState(false);
     const [showCreate, setShowCreate] = useState(false);
-    const [showMarks, setShowMarks] = useState(null); // exam object
+    const [showMarks, setShowMarks] = useState(null);
     const [error, setError] = useState('');
     const [deleteConfirm, setDeleteConfirm] = useState(null);
+    const [analytics, setAnalytics] = useState(null);
+    const [improvers, setImprovers] = useState([]);
+    const [improversLoading, setImproversLoading] = useState(false);
+    const [scorers, setScorers] = useState([]);
+    const [scorersLoading, setScorersLoading] = useState(false);
+    const [leaderboardType, setLeaderboardType] = useState('improvers');
+    const [filterBatch, setFilterBatch] = useState('');
+    const [filterSubject, setFilterSubject] = useState('');
+    const [visibleCount, setVisibleCount] = useState(15);
 
     const fetchExams = async () => {
         try {
             setLoading(true);
-            const { data } = await API().get('/exams');
+            const { data } = await apiClient.get('/exams');
             setExams(data.exams || []);
         } catch {
             setError('Failed to load exams.');
@@ -62,19 +65,62 @@ const ExamsPage = () => {
         setSelectedExam(exam);
         setResultsLoading(true);
         try {
-            const { data } = await API().get(`/exams/${exam._id}/results`);
-            setResults(data.results || []);
-        } catch { setResults([]); }
+            const [resData, anaData] = await Promise.all([
+                apiClient.get(`/exams/${exam._id}/results`),
+                apiClient.get(`/exams/${exam._id}/analytics`)
+            ]);
+            setResults(resData.data.results || []);
+            setAnalytics(anaData.data);
+        } catch {
+            setResults([]);
+            setAnalytics(null);
+        }
         finally { setResultsLoading(false); }
+    };
+
+    const fetchImprovers = async (batchId) => {
+        if (!batchId) return;
+        setImproversLoading(true);
+        try {
+            const { data } = await apiClient.get(`/exams/batch/${batchId}/improvers`);
+            setImprovers(data.improvers || []);
+        } catch { setImprovers([]); }
+        finally { setImproversLoading(false); }
+    };
+
+    const fetchScorers = async (batchId) => {
+        if (!batchId) return;
+        setScorersLoading(true);
+        try {
+            const { data } = await apiClient.get(`/exams/batch/${batchId}/top-scorers`);
+            setScorers(data.scorers || []);
+        } catch { setScorers([]); }
+        finally { setScorersLoading(false); }
     };
 
     const handleDelete = async (id) => {
         try {
-            await API().delete(`/exams/${id}`);
+            await apiClient.delete(`/exams/${id}`);
             setDeleteConfirm(null);
             fetchExams();
         } catch { setError('Failed to delete.'); }
     };
+
+    // Derived Data for Filtering
+    const uniqueBatches = Array.from(new Set(exams.map(e => e.batchId?._id).filter(Boolean)))
+        .map(id => exams.find(e => e.batchId?._id === id).batchId);
+
+    const availableSubjects = filterBatch
+        ? Array.from(new Set(exams.filter(e => e.batchId?._id === filterBatch).map(e => e.subject)))
+        : [];
+
+    const filteredExams = exams.filter(e => {
+        const matchBatch = !filterBatch || e.batchId?._id === filterBatch;
+        const matchSubject = !filterSubject || e.subject === filterSubject;
+        return matchBatch && matchSubject;
+    });
+
+    const displayedExams = filteredExams.slice(0, visibleCount);
 
     const passCount = results.filter(r => r.marksObtained >= selectedExam?.passingMarks).length;
     const failCount = results.length - passCount;
@@ -82,7 +128,27 @@ const ExamsPage = () => {
 
     return (
         <ERPLayout title="Exams & Results">
-            <div className="page-hdr" style={{ marginBottom: 24 }}>
+            <style>{`
+                .erp-table-wrap { overflow-x: auto; width: 100%; -webkit-overflow-scrolling: touch; }
+                
+                @media (max-width: 768px) {
+                    .ex-hdr { flex-direction: column !important; align-items: flex-start !important; gap: 16px !important; }
+                    .ex-hdr button { width: 100% !important; justify-content: center !important; }
+                    .ex-tabs { width: 100% !important; overflow-x: auto; flex-wrap: nowrap !important; white-space: nowrap; }
+                    .ex-tabs button { flex-shrink: 0; }
+                    .ex-summary-grid { grid-template-columns: repeat(3, 1fr) !important; gap: 10px !important; }
+                    .ex-result-header { flex-direction: column !important; align-items: flex-start !important; gap: 10px !important; padding: 16px !important; }
+                    .ex-result-header div { font-size: 0.85rem !important; }
+                    .global-filters { flex-direction: column !important; align-items: stretch !important; gap: 12px !important; }
+                    .global-filters > div { width: 100% !important; min-width: auto !important; }
+                }
+
+                @media (max-width: 480px) {
+                    .ex-summary-grid { grid-template-columns: repeat(2, 1fr) !important; }
+                }
+            `}</style>
+
+            <div className="page-hdr ex-hdr" style={{ marginBottom: 24 }}>
                 <div>
                     <h1 style={{ fontSize: '1.7rem', fontWeight: 900, color: 'var(--erp-primary)' }}>Exams & Results</h1>
                     <p style={{ color: '#64748b', fontSize: '0.9rem' }}>Create tests, enter marks and view color-coded results</p>
@@ -98,11 +164,44 @@ const ExamsPage = () => {
                 </div>
             )}
 
-            {/* Tabs */}
-            <div style={{ display: 'flex', gap: 4, background: '#f1f5f9', padding: 4, borderRadius: 10, marginBottom: 24, width: 'fit-content' }}>
+            <div className="card global-filters" style={{ padding: '16px 20px', marginBottom: 24, display: 'flex', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                    <label style={{ display: 'block', fontSize: '10px', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>1. Select Batch</label>
+                    <select
+                        value={filterBatch}
+                        onChange={e => { setFilterBatch(e.target.value); setFilterSubject(''); setSelectedExam(null); if (tab === 'leaderboard') { if (leaderboardType === 'improvers') fetchImprovers(e.target.value); else fetchScorers(e.target.value); } }}
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: '0.9rem', fontWeight: 600, color: '#1e293b', outline: 'none' }}
+                    >
+                        <option value="">All Batches</option>
+                        {uniqueBatches.map(b => <option key={b._id} value={b._id}>{b.name}</option>)}
+                    </select>
+                </div>
+                <div style={{ flex: 1, minWidth: 200, opacity: filterBatch ? 1 : 0.5, pointerEvents: filterBatch ? 'all' : 'none' }}>
+                    <label style={{ display: 'block', fontSize: '10px', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>2. Select Subject</label>
+                    <select
+                        value={filterSubject}
+                        onChange={e => { setFilterSubject(e.target.value); setSelectedExam(null); }}
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: '0.9rem', fontWeight: 600, color: '#1e293b', outline: 'none' }}
+                    >
+                        <option value="">{filterBatch ? 'All Subjects' : 'Select Batch first...'}</option>
+                        {availableSubjects.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                </div>
+                {(filterBatch || filterSubject) && (
+                    <button
+                        onClick={() => { setFilterBatch(''); setFilterSubject(''); setSelectedExam(null); }}
+                        style={{ background: '#f1f5f9', border: 'none', padding: '10px 16px', borderRadius: 8, color: '#64748b', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}
+                    >
+                        Reset Filters
+                    </button>
+                )}
+            </div>
+
+            <div className="ex-tabs" style={{ display: 'flex', gap: 4, background: '#f1f5f9', padding: 4, borderRadius: 10, marginBottom: 24, width: 'fit-content' }}>
                 {[
                     { key: 'tests', label: 'Tests', Icon: ClipboardList },
-                    { key: 'results', label: 'Results', Icon: Trophy },
+                    { key: 'results', label: 'Results', Icon: CheckCircle2 },
+                    { key: 'leaderboard', label: 'Leaderboards', Icon: Trophy },
                 ].map(({ key, label, Icon }) => (
                     <button key={key} onClick={() => setTab(key)} style={{
                         padding: '8px 22px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 700,
@@ -116,7 +215,6 @@ const ExamsPage = () => {
                 ))}
             </div>
 
-            {/* Tests Tab */}
             {tab === 'tests' && (
                 <div className="card" style={{ overflow: 'hidden' }}>
                     {loading ? (
@@ -127,97 +225,115 @@ const ExamsPage = () => {
                             <p>No tests created yet. Click "Create Test" to start.</p>
                         </div>
                     ) : (
-                        <table className="erp-table">
-                            <thead>
-                                <tr style={{ background: '#f8fafc' }}>
-                                    <th>Test Name</th>
-                                    <th>Batch</th>
-                                    <th>Subject</th>
-                                    <th>Total / Passing</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {exams.map(exam => (
-                                    <tr key={exam._id}>
-                                        <td><div className="td-bold">{exam.name}</div></td>
-                                        <td><span style={{ background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: 20, fontSize: '0.78rem', fontWeight: 700 }}>{exam.batchId?.name || '—'}</span></td>
-                                        <td className="td-sm">{exam.subject}</td>
-                                        <td className="td-sm"><span style={{ fontWeight: 700 }}>{exam.totalMarks}</span> / <span style={{ color: '#64748b' }}>{exam.passingMarks}</span></td>
-                                        <td>{statusBadge(exam.status)}</td>
-                                        <td>
-                                            <div style={{ display: 'flex', gap: 6 }}>
-                                                <button
-                                                    className="btn btn-sm btn-outline"
-                                                    style={{ display: 'flex', alignItems: 'center', gap: 4 }}
-                                                    onClick={() => setShowMarks(exam)}
-                                                >
-                                                    <Edit3 size={13} /> Marks
-                                                </button>
-                                                <button
-                                                    className="btn btn-sm btn-outline"
-                                                    style={{ display: 'flex', alignItems: 'center', gap: 4 }}
-                                                    onClick={() => { fetchResults(exam); setTab('results'); }}
-                                                >
-                                                    <ChevronRight size={13} /> Results
-                                                </button>
-                                                <button
-                                                    className="btn btn-sm"
-                                                    style={{ background: '#fee2e2', color: '#ef4444', border: 'none', display: 'flex', alignItems: 'center', gap: 4 }}
-                                                    onClick={() => setDeleteConfirm(exam._id)}
-                                                >
-                                                    <Trash2 size={13} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                        <>
+                            <div className="erp-table-wrap">
+                                <table className="erp-table">
+                                    <thead>
+                                        <tr style={{ background: '#f8fafc' }}>
+                                            <th>Test Name</th>
+                                            <th>Batch</th>
+                                            <th>Subject</th>
+                                            <th>Total / Passing</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {displayedExams.map(exam => (
+                                            <tr key={exam._id}>
+                                                <td><div className="td-bold">{exam.name}</div></td>
+                                                <td><span style={{ background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: 20, fontSize: '0.78rem', fontWeight: 700 }}>{exam.batchId?.name || '—'}</span></td>
+                                                <td className="td-sm">{exam.subject}</td>
+                                                <td className="td-sm"><span style={{ fontWeight: 700 }}>{exam.totalMarks}</span> / <span style={{ color: '#64748b' }}>{exam.passingMarks}</span></td>
+                                                <td>{statusBadge(exam.status)}</td>
+                                                <td>
+                                                    <div style={{ display: 'flex', gap: 6 }}>
+                                                        <button
+                                                            className="btn btn-sm btn-outline"
+                                                            style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                                                            onClick={() => setShowMarks(exam)}
+                                                        >
+                                                            <Edit3 size={13} /> Marks
+                                                        </button>
+                                                        <button
+                                                            className="btn btn-sm btn-outline"
+                                                            style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                                                            onClick={() => { fetchResults(exam); setTab('results'); }}
+                                                        >
+                                                            <ChevronRight size={13} /> Results
+                                                        </button>
+                                                        <button
+                                                            className="btn btn-sm"
+                                                            style={{ background: '#fee2e2', color: '#ef4444', border: 'none', display: 'flex', alignItems: 'center', gap: 4 }}
+                                                            onClick={() => setDeleteConfirm(exam._id)}
+                                                        >
+                                                            <Trash2 size={13} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {filteredExams.length > displayedExams.length && (
+                                <div style={{ padding: '0 20px 20px 20px', textAlign: 'center', fontSize: '0.8rem', color: '#64748b' }}>
+                                    Showing {displayedExams.length} of {filteredExams.length} tests
+                                    <button
+                                        onClick={() => setVisibleCount(v => v + 15)}
+                                        style={{
+                                            background: 'none', border: 'none', color: 'var(--erp-primary)',
+                                            fontWeight: 700, cursor: 'pointer', marginLeft: 8, fontSize: '0.8rem'
+                                        }}
+                                    >
+                                        Load More
+                                    </button>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             )}
 
-            {/* Results Tab */}
             {tab === 'results' && (
                 <div>
-                    {/* Exam selector */}
                     <div className="card" style={{ padding: 16, marginBottom: 16 }}>
-                        <label style={{ fontWeight: 600, fontSize: '0.85rem', color: '#475569', marginBottom: 6, display: 'block' }}>Select Test to View Results</label>
+                        <label style={{ display: 'block', fontSize: '10px', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>3. Select Test to View Results</label>
                         <select
                             value={selectedExam?._id || ''}
                             onChange={e => {
                                 const exam = exams.find(x => x._id === e.target.value);
                                 if (exam) fetchResults(exam);
                             }}
-                            style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: '0.9rem', minWidth: 260 }}
+                            style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: '0.9rem', fontWeight: 700, color: '#1e293b', minWidth: 260, width: '100%', outline: 'none' }}
+                            disabled={!filterBatch || !filterSubject}
                         >
-                            <option value="">-- Choose a test --</option>
-                            {exams.map(e => <option key={e._id} value={e._id}>{e.name} ({e.batchId?.name} — {e.subject})</option>)}
+                            <option value="">{!filterBatch ? 'Choose Batch first...' : !filterSubject ? 'Choose Subject first...' : '-- Select Test --'}</option>
+                            {filteredExams.map(e => <option key={e._id} value={e._id}>{e.name} (Ch: {e.chapter})</option>)}
                         </select>
                     </div>
 
                     {selectedExam && (
                         <>
-                            {/* Summary Cards */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 20 }}>
+                            <div className="ex-summary-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16, marginBottom: 20 }}>
                                 {[
                                     { label: 'Total Students', value: results.length, color: '#1b3a7a' },
-                                    { label: '✅ Passed', value: passCount, color: '#15803d' },
-                                    { label: '❌ Failed', value: failCount, color: '#be123c' },
-                                    { label: 'Avg. Marks', value: avgMarks, color: '#a16207' },
-                                ].map(c => (
-                                    <div key={c.label} className="card" style={{ padding: '16px 20px', textAlign: 'center' }}>
+                                    { label: 'Appeared', icon: <CheckCircle2 size={14} />, value: analytics?.appeared || 0, color: '#15803d' },
+                                    { label: 'Absent', icon: <XCircle size={14} />, value: analytics?.absent || 0, color: '#be123c' },
+                                    { label: 'Avg. Score', value: analytics?.avgScore || 0, color: '#a16207' },
+                                    { label: 'Highest', icon: <Trophy size={14} />, value: analytics?.highestScore || 0, color: '#1e40af' },
+                                ].map((c, index) => (
+                                    <div key={index} className="card" style={{ padding: '16px 20px', textAlign: 'center' }}>
                                         <div style={{ fontSize: '1.6rem', fontWeight: 900, color: c.color }}>{c.value}</div>
-                                        <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600, marginTop: 4 }}>{c.label}</div>
+                                        <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600, marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                                            {c.icon && c.icon} {c.label}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
 
-                            {/* Result table */}
                             <div className="card" style={{ overflow: 'hidden' }}>
-                                <div style={{ padding: '16px 20px', background: '#0f172a', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div className="ex-result-header" style={{ padding: '16px 20px', background: '#0f172a', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <div style={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 10 }}>
                                         <Trophy size={18} style={{ color: '#f59e0b' }} />
                                         {selectedExam.name} — {selectedExam.batchId?.name} / {selectedExam.subject}
@@ -232,43 +348,45 @@ const ExamsPage = () => {
                                         <p>No marks entered yet. Click "Marks" on the Tests tab to upload marks.</p>
                                     </div>
                                 ) : (
-                                    <table className="erp-table">
-                                        <thead>
-                                            <tr>
-                                                <th>#</th>
-                                                <th>Student</th>
-                                                <th>Roll No.</th>
-                                                <th>Marks Obtained</th>
-                                                <th>Out of</th>
-                                                <th>Result</th>
-                                                <th>Remarks</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {results.map((r, idx) => {
-                                                const style = getResultStyle(r.marksObtained, selectedExam.totalMarks, selectedExam.passingMarks);
-                                                const passed = r.marksObtained >= selectedExam.passingMarks;
-                                                const grade = passed ? 'PASS' : 'FAIL';
-                                                return (
-                                                    <tr key={r._id} style={{ ...style }}>
-                                                        <td style={{ color: '#64748b', fontSize: '0.8rem' }}>{idx + 1}</td>
-                                                        <td><div className="td-bold" style={{ color: style.color }}>{r.studentId?.name || '—'}</div></td>
-                                                        <td className="td-sm">{r.studentId?.rollNo || '—'}</td>
-                                                        <td><span style={{ fontSize: '1.1rem', fontWeight: 900, color: style.color }}>{r.marksObtained}</span></td>
-                                                        <td className="td-sm">{selectedExam.totalMarks}</td>
-                                                        <td>
-                                                            <span style={{
-                                                                background: style.borderLeft.replace('3px solid ', '') + '22',
-                                                                color: style.color,
-                                                                padding: '3px 10px', borderRadius: 20, fontWeight: 800, fontSize: '0.75rem'
-                                                            }}>{grade}</span>
-                                                        </td>
-                                                        <td className="td-sm">{r.remarks || '—'}</td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
+                                    <div className="erp-table-wrap">
+                                        <table className="erp-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>#</th>
+                                                    <th>Student</th>
+                                                    <th>Roll No.</th>
+                                                    <th>Marks Obtained</th>
+                                                    <th>Out of</th>
+                                                    <th>Result</th>
+                                                    <th>Remarks</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {results.map((r, idx) => {
+                                                    const style = getResultStyle(r.marksObtained, selectedExam.totalMarks, selectedExam.passingMarks);
+                                                    const passed = r.marksObtained >= selectedExam.passingMarks;
+                                                    const grade = passed ? 'PASS' : 'FAIL';
+                                                    return (
+                                                        <tr key={r._id} style={{ ...style }}>
+                                                            <td style={{ color: '#64748b', fontSize: '0.8rem' }}>{idx + 1}</td>
+                                                            <td><div className="td-bold" style={{ color: style.color }}>{r.studentId?.name || '—'}</div></td>
+                                                            <td className="td-sm">{r.studentId?.rollNo || '—'}</td>
+                                                            <td><span style={{ fontSize: '1.1rem', fontWeight: 900, color: style.color }}>{r.marksObtained}</span></td>
+                                                            <td className="td-sm">{selectedExam.totalMarks}</td>
+                                                            <td>
+                                                                <span style={{
+                                                                    background: style.borderLeft.replace('3px solid ', '') + '22',
+                                                                    color: style.color,
+                                                                    padding: '3px 10px', borderRadius: 20, fontWeight: 800, fontSize: '0.75rem'
+                                                                }}>{grade}</span>
+                                                            </td>
+                                                            <td className="td-sm">{r.remarks || '—'}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 )}
                             </div>
                         </>
@@ -283,10 +401,139 @@ const ExamsPage = () => {
                 </div>
             )}
 
-            {/* Delete Confirm */}
+            {tab === 'leaderboard' && (
+                <div className="card" style={{ padding: 24 }}>
+                    <div style={{ display: 'flex', gap: 8, background: '#f8fafc', padding: '4px', borderRadius: 8, border: '1px solid #e2e8f0', marginBottom: 20, width: 'fit-content' }}>
+                        <button
+                            onClick={() => setLeaderboardType('improvers')}
+                            style={{
+                                padding: '6px 16px', borderRadius: 6, border: 'none', fontSize: '0.75rem', fontWeight: 800, cursor: 'pointer',
+                                background: leaderboardType === 'improvers' ? 'var(--erp-primary)' : 'transparent',
+                                color: leaderboardType === 'improvers' ? '#fff' : '#64748b'
+                            }}
+                        >
+                            Top Improvers
+                        </button>
+                        <button
+                            onClick={() => setLeaderboardType('scorers')}
+                            style={{
+                                padding: '6px 16px', borderRadius: 6, border: 'none', fontSize: '0.75rem', fontWeight: 800, cursor: 'pointer',
+                                background: leaderboardType === 'scorers' ? 'var(--erp-primary)' : 'transparent',
+                                color: leaderboardType === 'scorers' ? '#fff' : '#64748b'
+                            }}
+                        >
+                            Merit List
+                        </button>
+                    </div>
+
+                    {!filterBatch ? (
+                        <div className="empty" style={{ padding: 60 }}>
+                            <Trophy size={48} style={{ opacity: 0.1, marginBottom: 12 }} />
+                            <p>Select a batch and subject from the filters above to access the leaderboards.</p>
+                        </div>
+                    ) : leaderboardType === 'improvers' ? (
+                        improversLoading ? (
+                            <div className="loader-wrap" style={{ padding: 40 }}><Loader2 className="spinner" size={32} /></div>
+                        ) : improvers.length === 0 ? (
+                            <div className="empty" style={{ padding: 60 }}>
+                                <Trophy size={48} style={{ opacity: 0.1, marginBottom: 12 }} />
+                                <p>No improvement data available for this batch.</p>
+                                <p style={{ fontSize: '0.8rem', opacity: 0.6 }}>Note: Requires students to have at least 2 test results.</p>
+                            </div>
+                        ) : (
+                            <div className="erp-table-wrap">
+                                <table className="erp-table">
+                                    <thead>
+                                        <tr style={{ background: '#f8fafc' }}>
+                                            <th style={{ width: 80 }}>Rank</th>
+                                            <th>Student Name</th>
+                                            <th>Improvement</th>
+                                            <th>Current Avg %</th>
+                                            <th>Previous Avg %</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {improvers.map((imp, i) => (
+                                            <tr key={i}>
+                                                <td style={{ fontWeight: 800 }}>
+                                                    {i === 0 ? <Award size={20} color="#eab308" style={{ verticalAlign: 'middle' }} /> :
+                                                        i === 1 ? <Award size={20} color="#94a3b8" style={{ verticalAlign: 'middle' }} /> :
+                                                            i === 2 ? <Award size={20} color="#b45309" style={{ verticalAlign: 'middle' }} /> :
+                                                                `#${i + 1}`}
+                                                </td>
+                                                <td><div className="td-bold">{imp.name}</div></td>
+                                                <td>
+                                                    <span style={{
+                                                        color: '#15803d', fontWeight: 800, background: '#f0fdf4',
+                                                        padding: '4px 12px', borderRadius: 20, fontSize: '0.85rem'
+                                                    }}>
+                                                        +{imp.improvement}%
+                                                    </span>
+                                                </td>
+                                                <td className="td-bold">{imp.current}%</td>
+                                                <td className="td-sm">{imp.last}%</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )
+                    ) : (
+                        scorersLoading ? (
+                            <div className="loader-wrap" style={{ padding: 40 }}><Loader2 className="spinner" size={32} /></div>
+                        ) : scorers.length === 0 ? (
+                            <div className="empty" style={{ padding: 60 }}>
+                                <Trophy size={48} style={{ opacity: 0.1, marginBottom: 12 }} />
+                                <p>No merit data available for this batch.</p>
+                            </div>
+                        ) : (
+                            <div className="erp-table-wrap">
+                                <table className="erp-table">
+                                    <thead>
+                                        <tr style={{ background: '#f8fafc' }}>
+                                            <th style={{ width: 80 }}>Rank</th>
+                                            <th>Student Name</th>
+                                            <th>Overall Avg %</th>
+                                            <th>Tests Taken</th>
+                                            <th>Standing</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {scorers.map((s, i) => (
+                                            <tr key={i}>
+                                                <td style={{ fontWeight: 800 }}>
+                                                    {i === 0 ? <Trophy size={20} color="#eab308" style={{ verticalAlign: 'middle' }} /> :
+                                                        i === 1 ? <Star size={20} color="#94a3b8" style={{ verticalAlign: 'middle' }} /> :
+                                                            i === 2 ? <Sparkles size={20} color="#b45309" style={{ verticalAlign: 'middle' }} /> :
+                                                                `#${i + 1}`}
+                                                </td>
+                                                <td><div className="td-bold">{s.name}</div></td>
+                                                <td>
+                                                    <div style={{ fontSize: '1.2rem', fontWeight: 900, color: 'var(--erp-primary)' }}>{s.avgScore}%</div>
+                                                </td>
+                                                <td className="td-sm">{s.testsTaken} Tests</td>
+                                                <td>
+                                                    <span style={{
+                                                        background: s.avgScore >= 90 ? '#f0fdf4' : s.avgScore >= 75 ? '#eff6ff' : '#f8fafc',
+                                                        color: s.avgScore >= 90 ? '#15803d' : s.avgScore >= 75 ? '#1e40af' : '#64748b',
+                                                        padding: '4px 12px', borderRadius: 20, fontSize: '0.75rem', fontWeight: 800
+                                                    }}>
+                                                        {s.avgScore >= 90 ? 'Outstanding' : s.avgScore >= 75 ? 'Distinguished' : 'Standard'}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )
+                    )}
+                </div>
+            )}
+
             {deleteConfirm && (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div className="card" style={{ padding: 32, maxWidth: 380, textAlign: 'center' }}>
+                    <div className="card" style={{ padding: 32, maxWidth: 380, textAlign: 'center', width: '90%' }}>
                         <Trash2 size={40} style={{ color: '#ef4444', marginBottom: 12, margin: '0 auto 12px' }} />
                         <h3 style={{ fontWeight: 800, marginBottom: 8 }}>Delete Exam?</h3>
                         <p style={{ color: '#64748b', marginBottom: 20, fontSize: '0.9rem' }}>This will permanently delete the exam and all student results. This cannot be undone.</p>

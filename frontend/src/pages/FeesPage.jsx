@@ -19,12 +19,7 @@ import CreateFeeModal from '../components/fees/CreateFeeModal';
 import AddExpenseModal from '../components/fees/AddExpenseModal';
 import ActionModal from '../components/common/ActionModal';
 
-import { API_BASE_URL } from '../api/apiConfig';
-
-const API = () => axios.create({
-    baseURL: `${API_BASE_URL}/api`,
-    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-});
+import apiClient, { API_BASE_URL } from '../api/apiConfig';
 
 const FeesPage = () => {
     const navigate = useNavigate();
@@ -60,13 +55,13 @@ const FeesPage = () => {
 
     const loadBatches = async () => {
         try {
-            const { data } = await API().get('/batches');
+            const { data } = await apiClient.get('/batches');
             setBatches(Array.isArray(data.batches) ? data.batches : []);
         } catch { }
     };
 
     const loadMetrics = async () => {
-        try { const { data } = await API().get('/fees/metrics'); setMetrics(data); } catch { }
+        try { const { data } = await apiClient.get('/fees/metrics'); setMetrics(data); } catch { }
     };
 
     const load = useCallback(async () => {
@@ -80,7 +75,7 @@ const FeesPage = () => {
             const limit = isDefaultLoad ? 5 : 10;
             const apiStatus = status === 'all' ? '' : status;
             const params = { search, page, status: apiStatus, batchId, course, limit };
-            const { data } = await API().get('/fees', { params });
+            const { data } = await apiClient.get('/fees', { params });
             if (data) {
                 if (page === 1) {
                     setFees(data.fees || []);
@@ -422,7 +417,7 @@ const FeesPage = () => {
     const confirmPayment = async (formData, pwd) => {
         setActionState(prev => ({ ...prev, loading: true, error: '' }));
         try {
-            const { data } = await API().post(`/fees/${selFee._id}/pay`, { ...formData, adminPassword: pwd });
+            const { data } = await apiClient.post(`/fees/${selFee._id}/pay`, { ...formData, adminPassword: pwd });
             if (data.receiptNo) {
                 const pData = { ...formData, amount: parseFloat(formData.amountPaid), receiptNo: data.receiptNo, date: new Date() };
                 const url = await generateReceipt({ ...selFee, ...formData }, pData, true);
@@ -452,7 +447,7 @@ const FeesPage = () => {
     const confirmCreateFee = async (formData, pwd) => {
         setActionState(prev => ({ ...prev, loading: true, error: '' }));
         try {
-            await API().post('/fees', { ...formData, adminPassword: pwd });
+            await apiClient.post('/fees', { ...formData, adminPassword: pwd });
             setActionState(prev => ({ ...prev, isOpen: false }));
             setModal(false);
             load();
@@ -478,7 +473,7 @@ const FeesPage = () => {
     const confirmBulkGenesis = async (pwd) => {
         setActionState(prev => ({ ...prev, loading: true, error: '' }));
         try {
-            await API().post('/fees/generate', { ...genForm, adminPassword: pwd });
+            await apiClient.post('/fees/generate', { ...genForm, adminPassword: pwd });
             setActionState(prev => ({ ...prev, isOpen: false }));
             setModal(false);
             load();
@@ -549,7 +544,7 @@ const FeesPage = () => {
     const confirmBulkSurcharge = async (formData, pwd) => {
         setActionState(prev => ({ ...prev, loading: true, error: '' }));
         try {
-            await API().post('/fees/bulk-surcharge', { ...formData, feeIds: selectedIds, adminPassword: pwd });
+            await apiClient.post('/fees/bulk-surcharge', { ...formData, feeIds: selectedIds, adminPassword: pwd });
             setActionState(prev => ({ ...prev, isOpen: false }));
             setSelectedIds([]);
             setModal(false);
@@ -582,8 +577,19 @@ const FeesPage = () => {
 
     return (
         <ERPLayout title="Fee Management">
+            <style>{`
+                @media (max-width: 640px) {
+                    .fees-hdr { flex-direction: column !important; align-items: flex-start !important; }
+                    .fees-hdr .flex { width: 100% !important; }
+                    .fees-hdr button { flex: 1 !important; justify-content: center !important; }
+                    .fees-tb { padding: 12px !important; gap: 8px !important; }
+                    .fees-tb .tb-search-wrap { width: 100% !important; }
+                    .fees-tb select { width: 100% !important; min-width: 100% !important; }
+                    .fees-tb button { width: 100% !important; }
+                }
+            `}</style>
             {/* ── Page Header ─────────────────────────────── */}
-            <div className="page-hdr">
+            <div className="page-hdr fees-hdr">
                 <div>
                     <h1>Fee Management</h1>
                     <p>Financial tracking and student billing system</p>
@@ -614,7 +620,7 @@ const FeesPage = () => {
             </div>
 
             {/* ── Filter Bar ──────────────────────────────── */}
-            <div className="card toolbar rounded-md" style={{ marginBottom: 20 }}>
+            <div className="card toolbar rounded-md fees-tb" style={{ marginBottom: 20 }}>
                 <div className="tb-search-wrap">
                     <Search size={15} />
                     <input

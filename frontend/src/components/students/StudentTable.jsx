@@ -1,6 +1,7 @@
 import React from 'react';
-import { User, Eye, Pencil, Loader2, Search, UserCheck, UserX } from 'lucide-react';
+import { User, Eye, Pencil, Search, UserCheck, UserX } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { SkeletonTable } from '../common/SkeletonLoaders';
 
 const StudentTable = ({
     students,
@@ -15,12 +16,7 @@ const StudentTable = ({
     const navigate = useNavigate();
 
     if (loading && page === 1) {
-        return (
-            <div className="p-20 flex flex-col items-center gap-4 text-slate-400">
-                <Loader2 className="spin" size={40} />
-                <p className="font-medium">Fetching secure records...</p>
-            </div>
-        );
+        return <SkeletonTable rows={10} />;
     }
 
     if (students.length === 0) {

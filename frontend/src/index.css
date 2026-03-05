@@ -379,6 +379,34 @@ a {
     }
 }
 
+/* Shimmer Animation */
+.shimmer {
+    position: relative;
+    overflow: hidden;
+    background-color: #f1f5f9;
+}
+
+.shimmer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg,
+            transparent 0%,
+            rgba(255, 255, 255, 0.4) 50%,
+            transparent 100%);
+    animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+    100% {
+        transform: translateX(100%);
+    }
+}
+
 /* ══════════════════════════════════════════════════════
    LAYOUT — Sidebar + Main
    ══════════════════════════════════════════════════════ */
@@ -397,9 +425,13 @@ a {
     display: flex;
     flex-direction: column;
     z-index: 200;
-    transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
     flex-shrink: 0;
     position: relative;
+}
+
+.sidebar.mini {
+    width: var(--sidebar-w-mini);
 }
 
 @media (max-width: 768px) {
@@ -409,14 +441,13 @@ a {
         top: 0;
         bottom: 0;
         transform: translateX(-100%);
+        width: 280px !important;
+        /* Always full width on mobile */
     }
 
     .sidebar.open {
         transform: translateX(0);
-    }
-
-    .sidebar-overlay {
-        display: block !important;
+        box-shadow: 20px 0 50px rgba(0, 0, 0, 0.3);
     }
 }
 
@@ -425,7 +456,9 @@ a {
     position: fixed;
     inset: 0;
     z-index: 199;
-    background: rgba(0, 0, 0, 0.4);
+    background: rgba(15, 23, 42, 0.5);
+    backdrop-filter: blur(2px);
+    animation: fadeIn 0.2s ease;
 }
 
 .erp-body {
@@ -434,6 +467,8 @@ a {
     flex-direction: column;
     height: 100%;
     overflow: hidden;
+    width: 100%;
+    /* Ensure it doesn't push out */
 }
 
 /* Brand */
@@ -554,6 +589,13 @@ a {
     flex-shrink: 0;
 }
 
+@media (max-width: 640px) {
+    .topbar {
+        padding: 0 16px;
+        height: 64px;
+    }
+}
+
 .tb-hamburger {
     width: 36px;
     height: 36px;
@@ -579,6 +621,9 @@ a {
     color: var(--erp-primary);
     font-family: 'Outfit', sans-serif;
     flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .tb-right {
@@ -624,6 +669,13 @@ a {
     border-color: #fca5a5;
     color: var(--erp-danger);
     background: #fef2f2;
+}
+
+@media (max-width: 640px) {
+    .btn-tb-logout {
+        display: none;
+        /* Hide full button on mobile, avatar handles profile/actions usually, or we can add a simple icon */
+    }
 }
 
 /* MAIN */
@@ -1201,7 +1253,7 @@ a {
     gap: 14px;
 }
 
-@media(max-width:480px) {
+@media(max-width:640px) {
     .mf-row {
         grid-template-columns: 1fr;
     }
@@ -1449,6 +1501,27 @@ a {
     animation: shake 0.5s cubic-bezier(.36, .07, .19, .97) both;
 }
 
+/* Responsive Utility Helpers */
+@media (max-width: 768px) {
+    .hide-mobile {
+        display: none !important;
+    }
+}
+
+@media (min-width: 769px) {
+    .show-mobile {
+        display: none !important;
+    }
+}
+
+.w-full {
+    width: 100% !important;
+}
+
+.h-full {
+    height: 100% !important;
+}
+
 /* Custom Scrollbar */
 .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
@@ -1465,4 +1538,10 @@ a {
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: #cbd5e1;
+}
+
+/* Ensure images are responsive by default */
+img {
+    max-width: 100%;
+    height: auto;
 }

@@ -2,7 +2,7 @@ import axios from 'axios';
 import { API_BASE_URL } from './apiConfig';
 
 
-const API = axios.create({ baseURL: `${API_BASE_URL}/admin` });
+const API = axios.create({ baseURL: `${API_BASE_URL}/api/admin` });
 
 export const checkAdminExists = () => API.get('/check-admin');
 export const adminSignup = (data) => API.post('/signup', data);
@@ -17,8 +17,7 @@ export const getAdminProfile = () => API.get('/profile', authHeader());
 export const updateAdminProfile = (data) => API.put('/profile', data, authHeader());
 export const updateAdminSettings = (data) => API.put('/settings', data, authHeader());
 
-const DASH_API = axios.create({ baseURL: `${API_BASE_URL}/api` });
-
-export const fetchDashboard = () => DASH_API.get('/admin', authHeader());
+// The dashboard work routes are also under this base
+export const fetchDashboard = () => API.get('/', authHeader());
 
 export default API;

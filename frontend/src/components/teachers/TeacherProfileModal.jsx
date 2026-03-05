@@ -7,7 +7,9 @@ import {
     Hash, Globe, Smartphone
 } from 'lucide-react';
 
-const TeacherProfileModal = ({ teacher, onClose, fmt, imgSrc, API }) => {
+import apiClient from '../../api/apiConfig';
+
+const TeacherProfileModal = ({ teacher, onClose, fmt, imgSrc }) => {
     const [profileData, setProfileData] = useState(null);
     const [payrollHistory, setPayrollHistory] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -19,8 +21,8 @@ const TeacherProfileModal = ({ teacher, onClose, fmt, imgSrc, API }) => {
             try {
                 // Using standard endpoints based on your previous snippets
                 const [profileRes, historyRes] = await Promise.all([
-                    API().get(`/payroll/profile/${teacher._id}`).catch(() => ({ data: null })),
-                    API().get(`/payroll/salaries?teacherId=${teacher._id}`).catch(() => ({ data: [] }))
+                    apiClient.get(`/payroll/profile/${teacher._id}`).catch(() => ({ data: null })),
+                    apiClient.get(`/payroll/salaries?teacherId=${teacher._id}`).catch(() => ({ data: [] }))
                 ]);
                 setProfileData(profileRes.data);
                 setPayrollHistory((historyRes.data || []).slice(0, 3));
@@ -32,7 +34,7 @@ const TeacherProfileModal = ({ teacher, onClose, fmt, imgSrc, API }) => {
         };
 
         fetchData();
-    }, [teacher?._id, API]);
+    }, [teacher?._id]);
 
     if (!teacher) return null;
 

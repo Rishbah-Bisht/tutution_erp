@@ -43,7 +43,7 @@ const ExpenseStats = ({ metrics, fmt }) => {
     });
 
     return (
-        <div className="stats-grid mb-6 grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="stats-grid mb-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {cards.map((c, i) => (
                 <div key={i} className="stat-card bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-center gap-5 transition-transform hover:-translate-y-1">
                     <div className="w-14 h-14 rounded-lg flex items-center justify-center" style={{ background: c.bg, color: c.color }}>

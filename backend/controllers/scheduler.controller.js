@@ -1,6 +1,7 @@
 const Batch = require('../models/Batch');
 const Admin = require('../models/Admin');
 const Teacher = require('../models/Teacher');
+const Schedule = require('../models/Schedule');
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -24,18 +25,14 @@ exports.autoSchedule = async (req, res) => {
         }
 
         // 1. Fetch current room occupancy
-        const query = { classroom, schedule: { $exists: true, $ne: [] } };
-        if (excludeBatchId) {
-            query._id = { $ne: excludeBatchId }; // if editing an existing batch
-        }
-
-        const batches = await Batch.find(query).select('schedule');
+        const allSchedules = await Schedule.find({
+            roomAllotted: classroom,
+            batchId: { $ne: excludeBatchId }
+        });
         const occupied = new Set();
 
-        batches.forEach(b => {
-            b.schedule?.forEach(s => {
-                occupied.add(`${s.day}-${s.time}`);
-            });
+        allSchedules.forEach(s => {
+            occupied.add(`${s.day}-${s.timeSlot}`);
         });
 
         // 2. Determine number of slots needed
@@ -127,6 +124,164 @@ exports.autoSchedule = async (req, res) => {
 // Fully automated: Takes a batchId, looks at its subjects, 
 // finds an available room, finds assigned teachers for each subject, 
 // and generates the time slots with teacher names.
+// POST /api/scheduler/expert-auto
+// Specialized Scheduler: 3 subjects, 3 timings, X days
+exports.expertAISchedule = async (req, res) => {
+    try {
+        const { classroom, subjects, timings, daysCount, batchId, batchName, course } = req.body;
+
+        if (!classroom || !subjects || !timings || !daysCount) {
+            return res.status(400).json({ message: 'Missing required parameters: classroom, subjects, timings, daysCount.' });
+        }
+
+        if (subjects.length > 3 || timings.length > 3) {
+            return res.status(400).json({ message: 'Expert scheduler supports a maximum of 3 subjects.' });
+        }
+
+        if (subjects.length !== timings.length) {
+            return res.status(400).json({ message: 'Number of subjects must match number of timings.' });
+        }
+
+        // 1. Fetch ALL current schedules to check global occupancy
+        const allSchedules = await Schedule.find({ batchId: { $ne: batchId } });
+        const admin = await Admin.findOne().select('roomsAvailable');
+        const roomCount = parseInt(admin?.roomsAvailable) || 5;
+        const classrooms = Array.from({ length: roomCount }, (_, i) => `Room ${i + 1}`);
+
+        // Build occupancy map: "day-time" -> array of { room, subject, teacher, course }
+        const globalOccupancy = {};
+        allSchedules.forEach(s => {
+            const key = `${s.day}-${s.timeSlot}`;
+            if (!globalOccupancy[key]) globalOccupancy[key] = [];
+            globalOccupancy[key].push({
+                room: s.roomAllotted,
+                subject: s.subject,
+                teacher: s.teacher,
+                course: s.course
+            });
+        });
+
+        // 2. Fetch teachers assigned to these subjects for this batch
+        const teachers = await Teacher.find({ status: 'active' });
+        const subjectTeachers = {};
+
+        subjects.forEach(sub => {
+            const found = teachers.find(t =>
+                t.assignments?.some(a =>
+                    (a.batchId?.toString() === batchId || a.batchName === batchName) &&
+                    a.subjects?.includes(sub)
+                )
+            );
+            subjectTeachers[sub] = found ? found.name : 'Unassigned';
+        });
+
+        // 3. Generate Schedule
+        const generatedSchedule = [];
+        const workingDays = DAYS.slice(0, daysCount);
+
+        for (const day of workingDays) {
+            for (let i = 0; i < subjects.length; i++) {
+                const time = timings[i];
+                const subject = subjects[i];
+                const teacher = subjectTeachers[subject];
+                const slotKey = `${day}-${time}`;
+                const slotsAtTime = globalOccupancy[slotKey] || [];
+
+                let assignedRoom = null;
+                let isMerged = false;
+
+                // Rule 1: Common Subject Logic (Same Course, Subject, Teacher)
+                const sharedMatch = slotsAtTime.find(s =>
+                    s.subject === subject &&
+                    s.teacher === teacher &&
+                    s.course === course
+                );
+
+                if (sharedMatch) {
+                    assignedRoom = sharedMatch.room;
+                    isMerged = true;
+                } else {
+                    // Rule 2: Teacher Busy Check
+                    const teacherBusy = slotsAtTime.find(s => s.teacher === teacher);
+                    if (teacherBusy) {
+                        return res.status(400).json({
+                            message: `Conflict: Teacher ${teacher} is busy in ${teacherBusy.room} teaching ${teacherBusy.subject} at ${time}.`
+                        });
+                    }
+
+                    // Rule 3: Split Subject Logic / Preferred Room
+                    // If preferred room is busy or occupied by the same class (different subject), find another.
+                    const roomOccupied = slotsAtTime.find(s => s.room === classroom);
+                    if (!roomOccupied) {
+                        assignedRoom = classroom;
+                    } else {
+                        // Find ANY other available room
+                        const otherRoom = classrooms.find(r => !slotsAtTime.some(s => s.room === r));
+                        if (otherRoom) {
+                            assignedRoom = otherRoom;
+                        } else {
+                            return res.status(400).json({
+                                message: `Conflict: No rooms available in the center on ${day} at ${time}.`
+                            });
+                        }
+                    }
+                }
+
+                generatedSchedule.push({
+                    day,
+                    time,
+                    subject,
+                    teacher,
+                    room: assignedRoom,
+                    isMerged
+                });
+
+                // Update local occupancy map for this generation pass
+                if (!globalOccupancy[slotKey]) globalOccupancy[slotKey] = [];
+                globalOccupancy[slotKey].push({
+                    room: assignedRoom,
+                    subject: subject,
+                    teacher: teacher,
+                    course: course
+                });
+            }
+        }
+
+        // 4. Persistence: Update Schedule collection and Batch document
+        // Delete old schedule for this batch first
+        await Schedule.deleteMany({ batchId });
+
+        const scheduleDocs = generatedSchedule.map(s => ({
+            batchId,
+            course,
+            subject: s.subject,
+            teacher: s.teacher,
+            day: s.day,
+            timeSlot: s.time,
+            roomAllotted: s.room,
+            isMerged: s.isMerged
+        }));
+        await Schedule.insertMany(scheduleDocs);
+
+        // Update Batch model for legacy support/quick view
+        await Batch.findByIdAndUpdate(batchId, {
+            schedule: generatedSchedule.map(s => ({
+                day: s.day,
+                time: s.time,
+                subject: s.subject,
+                teacher: s.teacher,
+                room: s.room
+            }))
+        });
+
+        return res.json({ schedule: generatedSchedule });
+
+    } catch (err) {
+        console.error('Error in expertAISchedule:', err);
+        res.status(500).json({ message: 'Server error during expert auto-schedule', error: err.message });
+    }
+};
+
 exports.autoScheduleBatch = async (req, res) => {
     try {
         const { batchId } = req.body;
@@ -143,60 +298,35 @@ exports.autoScheduleBatch = async (req, res) => {
         const roomCount = parseInt(admin?.roomsAvailable) || 5;
         const classrooms = Array.from({ length: roomCount }, (_, i) => `Room ${i + 1}`);
 
-        // 2. Fetch all other batch schedules to check occupancy
-        const allOtherBatches = await Batch.find({
-            _id: { $ne: batchId },
-            schedule: { $exists: true, $ne: [] }
-        }).select('classroom schedule');
+        // 2. Fetch all current schedules to check occupancy
+        const allSchedules = await Schedule.find({ batchId: { $ne: batchId } });
 
-        // Build room occupancy map
-        const roomOccupancy = {};
-        classrooms.forEach(c => roomOccupancy[c] = new Set());
-        allOtherBatches.forEach(b => {
-            if (b.classroom && roomOccupancy[b.classroom]) {
-                b.schedule?.forEach(s => roomOccupancy[b.classroom].add(`${s.day}-${s.time}`));
-            }
-        });
-
-        // 3. Fetch all active teachers to check their availability
-        const teachers = await Teacher.find({ status: 'active' });
-        const teacherOccupancy = {};
-        teachers.forEach(t => teacherOccupancy[t.name] = new Set());
-
-        const otherBatchesWithTeachers = await Batch.find({
-            _id: { $ne: batchId },
-            schedule: { $exists: true, $ne: [] }
-        }).select('schedule');
-
-        // Note: For teacher occupancy, we must check ALL batches (including those from other rooms)
-        const allBatches = await Batch.find({ schedule: { $exists: true, $ne: [] } }).select('schedule');
-        allBatches.forEach(b => {
-            b.schedule?.forEach(s => {
-                if (s.teacher && teacherOccupancy[s.teacher]) {
-                    teacherOccupancy[s.teacher].add(`${s.day}-${s.time}`);
-                }
+        // Build occupancy map: "day-time" -> array of { room, subject, teacher, course }
+        const globalOccupancy = {};
+        allSchedules.forEach(s => {
+            const key = `${s.day}-${s.timeSlot}`;
+            if (!globalOccupancy[key]) globalOccupancy[key] = [];
+            globalOccupancy[key].push({
+                room: s.roomAllotted,
+                subject: s.subject,
+                teacher: s.teacher,
+                course: s.course
             });
         });
 
+        // 3. Fetch all active teachers
+        const teachers = await Teacher.find({ status: 'active' });
         const timeSlots = buildTimeSlots();
         let selectedRoom = null;
         let generatedEntries = [];
 
         // 4. Algorithm: Find a room, then for each subject, find a slot and a teacher
-        // We iterate classrooms one by one
+        // We iterate classrooms one by one as "Primary Classroom" candidates
         for (const room of classrooms) {
             let tempEntries = [];
-            let currentRoomOccupancy = new Set(roomOccupancy[room]);
-            let currentTeacherOccupancy = JSON.parse(JSON.stringify(
-                Object.fromEntries(Object.entries(teacherOccupancy).map(([k, v]) => [k, Array.from(v)]))
-            ));
-            // Convert back to sets
-            Object.keys(currentTeacherOccupancy).forEach(k => currentTeacherOccupancy[k] = new Set(currentTeacherOccupancy[k]));
-
             let possible = true;
 
             for (const subject of subjects) {
-                // Find a teacher who is assigned to this batch and subject
                 const potentialTeachers = teachers.filter(t =>
                     t.assignments?.some(a =>
                         (a.batchId?.toString() === batchId.toString() || a.batchName === batch.name) &&
@@ -204,26 +334,58 @@ exports.autoScheduleBatch = async (req, res) => {
                     )
                 );
 
-                if (potentialTeachers.length === 0) {
-                    // Fallback: any teacher who can teach this subject generally (if we had subject expertise in model)
-                    // For now, if no one is assigned, we might have to stop or pick "Unassigned"
-                }
-
                 const teacherToUse = potentialTeachers.length > 0 ? potentialTeachers[0] : null;
                 const teacherName = teacherToUse ? teacherToUse.name : 'Unassigned';
 
-                // Find a slot where BOTH room and teacher are free
                 let foundSlot = false;
                 for (const day of DAYS) {
                     for (const time of timeSlots) {
                         const slotKey = `${day}-${time}`;
-                        const roomFree = !currentRoomOccupancy.has(slotKey);
-                        const teacherFree = teacherName === 'Unassigned' || !currentTeacherOccupancy[teacherName].has(slotKey);
+                        const slotsAtTime = globalOccupancy[slotKey] || [];
 
-                        if (roomFree && teacherFree) {
-                            tempEntries.push({ day, time, subject, teacher: teacherName });
-                            currentRoomOccupancy.add(slotKey);
-                            if (teacherName !== 'Unassigned') currentTeacherOccupancy[teacherName].add(slotKey);
+                        // Rule 1: Common Subject Logic (Shared Room)
+                        const sharedMatch = slotsAtTime.find(s =>
+                            s.subject === subject &&
+                            s.teacher === teacherName &&
+                            s.course === batch.course
+                        );
+
+                        if (sharedMatch) {
+                            tempEntries.push({
+                                day,
+                                time,
+                                subject,
+                                teacher: teacherName,
+                                room: sharedMatch.room,
+                                isMerged: true
+                            });
+                            foundSlot = true;
+                            break;
+                        }
+
+                        // Rule 2: Teacher Busy Check
+                        const isTeacherBusy = slotsAtTime.some(s => s.teacher === teacherName);
+                        if (isTeacherBusy) continue;
+
+                        // Rule 3: Split Subject Logic / Room Availability
+                        const isRoomFree = !slotsAtTime.some(s => s.room === room);
+                        if (isRoomFree) {
+                            tempEntries.push({
+                                day,
+                                time,
+                                subject,
+                                teacher: teacherName,
+                                room: room,
+                                isMerged: false
+                            });
+                            // Update local temp occupancy
+                            if (!globalOccupancy[slotKey]) globalOccupancy[slotKey] = [];
+                            globalOccupancy[slotKey].push({
+                                room,
+                                subject,
+                                teacher: teacherName,
+                                course: batch.course
+                            });
                             foundSlot = true;
                             break;
                         }
@@ -255,14 +417,82 @@ exports.autoScheduleBatch = async (req, res) => {
             return a.time.localeCompare(b.time);
         });
 
+        // 5. Persistence
+        await Schedule.deleteMany({ batchId });
+        const scheduleDocs = generatedEntries.map(s => ({
+            batchId,
+            course: batch.course,
+            subject: s.subject,
+            teacher: s.teacher,
+            day: s.day,
+            timeSlot: s.time,
+            roomAllotted: s.room,
+            isMerged: s.isMerged
+        }));
+        await Schedule.insertMany(scheduleDocs);
+
+        // Update Batch document
+        await Batch.findByIdAndUpdate(batchId, {
+            classroom: selectedRoom,
+            schedule: generatedEntries.map(s => ({
+                day: s.day,
+                time: s.time,
+                subject: s.subject,
+                teacher: s.teacher,
+                room: s.room
+            }))
+        });
+
         return res.json({
             schedule: generatedEntries,
             classroom: selectedRoom,
-            // For the summary teacher, we pick the most frequent or first one
             teacher: generatedEntries[0]?.teacher || 'Unassigned'
         });
 
     } catch (err) {
+        console.error('Error in autoScheduleBatch:', err);
         res.status(500).json({ message: 'Server error during batch auto-schedule', error: err.message });
+    }
+};
+
+// Helper to sync manual batch schedule changes to the centralized Schedule collection
+exports.syncBatchSchedule = async (batchId, course, scheduleArray) => {
+    try {
+        const Schedule = require('../models/Schedule');
+        await Schedule.deleteMany({ batchId });
+        if (!scheduleArray || scheduleArray.length === 0) return;
+
+        // Fetch other schedules for merging detection
+        const allOther = await Schedule.find({ batchId: { $ne: batchId } });
+        const occupancy = {};
+        allOther.forEach(s => {
+            const key = `${s.day}-${s.timeSlot}`;
+            if (!occupancy[key]) occupancy[key] = [];
+            occupancy[key].push(s);
+        });
+
+        const docs = scheduleArray.map(s => {
+            const slotKey = `${s.day}-${s.time}`;
+            const isMerged = (occupancy[slotKey] || []).some(other =>
+                other.course === course &&
+                other.subject === s.subject &&
+                other.teacher === s.teacher
+            );
+
+            return {
+                batchId,
+                course,
+                subject: s.subject,
+                teacher: s.teacher,
+                day: s.day,
+                timeSlot: s.time,
+                roomAllotted: s.room,
+                isMerged
+            };
+        });
+
+        await Schedule.insertMany(docs);
+    } catch (err) {
+        console.error('Error syncing batch schedule:', err);
     }
 };

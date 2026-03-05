@@ -15,4 +15,10 @@ router.get('/:id/students', ctrl.getExamStudents);
 router.get('/:id/results', ctrl.getExamResults);
 router.post('/:id/results', ctrl.saveMarks);
 
+// Analytics & Performance
+router.get('/:id/analytics', ctrl.getExamAnalytics);
+router.get('/student/:id/performance', ctrl.getStudentPerformance);
+router.get('/batch/:id/improvers', ctrl.getBatchImprovers);
+router.get('/batch/:id/top-scorers', ctrl.getBatchTopScorers);
+
 module.exports = router;

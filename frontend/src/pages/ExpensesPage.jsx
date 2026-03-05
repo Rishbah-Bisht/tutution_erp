@@ -15,12 +15,7 @@ import ExpenseDetailsModal from '../components/expenses/ExpenseDetailsModal';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-import { API_BASE_URL } from '../api/apiConfig';
-
-const API = () => axios.create({
-    baseURL: `${API_BASE_URL}/api`,
-    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-});
+import apiClient, { API_BASE_URL } from '../api/apiConfig';
 
 const ExpensesPage = () => {
     const navigate = useNavigate();
@@ -64,7 +59,7 @@ const ExpensesPage = () => {
     // --- Data Fetching ---
     const loadMetrics = useCallback(async () => {
         try {
-            const { data } = await API().get('/expenses/metrics');
+            const { data } = await apiClient.get('/expenses/metrics');
             setMetrics(data.metrics);
         } catch (e) {
             console.error('Failed to load metrics', e);
@@ -87,7 +82,7 @@ const ExpensesPage = () => {
             if (startDate) params.startDate = startDate;
             if (endDate) params.endDate = endDate;
 
-            const { data } = await API().get('/expenses', { params });
+            const { data } = await apiClient.get('/expenses', { params });
 
             if (page === 1) {
                 setExpenses(data.expenses || []);
@@ -253,7 +248,7 @@ const ExpensesPage = () => {
     const confirmPay = async (password) => {
         setPayLoading(true); setPayError('');
         try {
-            await API().put(`/expenses/${payExpenseId}/pay`, { adminPassword: password });
+            await apiClient.put(`/expenses/${payExpenseId}/pay`, { adminPassword: password });
             toast.success('Expense marked as Paid');
             setShowPay(false);
             setPayExpenseId(null);
@@ -276,7 +271,7 @@ const ExpensesPage = () => {
     const confirmDelete = async (password) => {
         setDelLoading(true); setDelError('');
         try {
-            await API().delete(`/expenses/${delExpenseId}`, { data: { adminPassword: password } });
+            await apiClient.delete(`/expenses/${delExpenseId}`, { data: { adminPassword: password } });
             toast.success('Expense deleted successfully');
             setShowDel(false);
             setDelExpenseId(null);
@@ -344,10 +339,17 @@ const ExpensesPage = () => {
 
     return (
         <ERPLayout title="Expense Management">
+            <style>{`
+                @media (max-width: 640px) {
+                    .exp-hdr { flex-direction: column !important; align-items: flex-start !important; gap: 16px !important; }
+                    .exp-hdr .flex { width: 100% !important; flex-direction: column !important; }
+                    .exp-hdr button { width: 100% !important; justify-content: center !important; }
+                }
+            `}</style>
             <ToastContainer toasts={toasts} onRemove={removeToast} />
 
             {/* Header */}
-            <div className="page-hdr">
+            <div className="page-hdr exp-hdr">
                 <div>
                     <h1>Expense Management</h1>
                     <p>Track outgoing payments, bills, and institute costs</p>

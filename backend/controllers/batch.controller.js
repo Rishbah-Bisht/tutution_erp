@@ -2,8 +2,7 @@ const Batch = require('../models/Batch');
 const Student = require('../models/Student');
 const Admin = require('../models/Admin');
 const mongoose = require('mongoose');
-
-// ── Dynamic Subject Fallbacks ──────────────────────────────────
+const { syncBatchSchedule } = require('./scheduler.controller');
 const STANDARD_SUBJECTS = [
     'Mathematics', 'Science', 'English', 'Hindi', 'Social Science',
     'Physics', 'Chemistry', 'Biology', 'Accountancy', 'Business Studies',
@@ -59,6 +58,10 @@ exports.createBatch = async (req, res) => {
 
         const batch = new Batch({ name, course, capacity, subjects, classroom, schedule, timeSlots, fees, teacher });
         await batch.save();
+
+        // CENTRALIZED SYNC
+        await syncBatchSchedule(batch._id, batch.course, schedule);
+
         res.status(201).json({ message: 'Batch created', batch });
     } catch (err) {
         res.status(500).json({ message: 'Server error', error: err.message });
@@ -77,6 +80,12 @@ exports.updateBatch = async (req, res) => {
 
         const batch = await Batch.findByIdAndUpdate(req.params.id, updateData, { new: true });
         if (!batch) return res.status(404).json({ message: 'Batch not found' });
+
+        // CENTRALIZED SYNC
+        if (updateData.schedule || updateData.course) {
+            await syncBatchSchedule(batch._id, batch.course, batch.schedule);
+        }
+
         res.json({ message: 'Batch updated', batch });
     } catch (err) {
         res.status(500).json({ message: 'Server error', error: err.message });
@@ -88,6 +97,11 @@ exports.deleteBatch = async (req, res) => {
     try {
         const batch = await Batch.findByIdAndDelete(req.params.id);
         if (!batch) return res.status(404).json({ message: 'Batch not found' });
+
+        // CENTRALIZED SYNC
+        const Schedule = require('../models/Schedule');
+        await Schedule.deleteMany({ batchId: req.params.id });
+
         res.json({ message: 'Batch deleted' });
     } catch (err) {
         res.status(500).json({ message: 'Server error', error: err.message });
@@ -147,22 +161,17 @@ exports.getSubjectsByCourse = (req, res) => {
 exports.getRoomOccupancy = async (req, res) => {
     try {
         const { excludeBatchId } = req.query;
-        const query = { classroom: { $exists: true, $ne: '' }, schedule: { $exists: true, $ne: [] } };
-        if (excludeBatchId && mongoose.Types.ObjectId.isValid(excludeBatchId)) {
-            query._id = { $ne: new mongoose.Types.ObjectId(excludeBatchId) };
-        }
+        const Schedule = require('../models/Schedule');
+        const schedules = await Schedule.find();
 
-        const batches = await Batch.find(query).select('name classroom schedule');
-
-        // Build nested map: occupancy[classroom][day][time] = batchName
         const occupancy = {};
-        batches.forEach(batch => {
-            if (!batch.classroom || !batch.schedule?.length) return;
-            if (!occupancy[batch.classroom]) occupancy[batch.classroom] = {};
-            batch.schedule.forEach(slot => {
-                if (!occupancy[batch.classroom][slot.day]) occupancy[batch.classroom][slot.day] = {};
-                occupancy[batch.classroom][slot.day][slot.time] = batch.name;
-            });
+        schedules.forEach(s => {
+            if (excludeBatchId && s.batchId.toString() === excludeBatchId) return;
+
+            const room = s.roomAllotted;
+            if (!occupancy[room]) occupancy[room] = {};
+            if (!occupancy[room][s.day]) occupancy[room][s.day] = {};
+            occupancy[room][s.day][s.timeSlot] = s.course + " (" + s.subject + ")";
         });
 
         res.json({ occupancy });

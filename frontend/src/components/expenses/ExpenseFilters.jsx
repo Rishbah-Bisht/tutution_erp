@@ -24,12 +24,24 @@ const ExpenseFilters = ({
     };
 
     return (
-        <div style={{
+        <div className="exp-filters" style={{
             display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px',
             background: '#fff', border: '1px solid var(--erp-border)', borderRadius: 'var(--radius-md)',
-            marginBottom: 20, boxShadow: 'var(--shadow-sm)'
+            marginBottom: 20, boxShadow: 'var(--shadow-sm)', flexWrap: 'wrap'
         }}>
-            <div style={{
+            <style>{`
+                @media (max-width: 640px) {
+                    .exp-filters { padding: 12px !important; gap: 8px !important; }
+                    .exp-search-wrap { max-width: 100% !important; width: 100% !important; order: 1; }
+                    .exp-filters-wrap { width: 100% !important; flex-direction: column !important; align-items: stretch !important; order: 2; margin-left: 0 !important; gap: 8px !important; }
+                    .exp-filters-wrap select { width: 100% !important; min-width: 100% !important; }
+                    .exp-date-wrap { width: 100% !important; justify-content: space-between !important; }
+                    .exp-date-wrap input { flex: 1 !important; text-align: center !important; width: auto !important; }
+                    .exp-clear-btn { width: 100% !important; justify-content: center !important; }
+                    .exp-divider { display: none !important; }
+                }
+            `}</style>
+            <div className="exp-search-wrap" style={{
                 position: 'relative', display: 'flex', alignItems: 'center', flex: 1, maxWidth: 300
             }}>
                 <Search size={14} style={{ position: 'absolute', left: 12, color: 'var(--erp-muted)' }} />
@@ -47,7 +59,7 @@ const ExpenseFilters = ({
                 />
             </div>
 
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginLeft: 'auto' }}>
+            <div className="exp-filters-wrap" style={{ display: 'flex', gap: 10, alignItems: 'center', marginLeft: 'auto' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--erp-muted2)', fontSize: '0.8rem', fontWeight: 600, marginRight: 4 }}>
                     <Filter size={14} /> Filters:
                 </div>
@@ -70,7 +82,7 @@ const ExpenseFilters = ({
                     {paymentModes.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
 
-                <div style={{
+                <div className="exp-date-wrap" style={{
                     display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
                     border: '1px solid var(--erp-border)', borderRadius: 'var(--radius-sm)',
                     background: 'var(--erp-bg2)'
@@ -94,6 +106,7 @@ const ExpenseFilters = ({
                 {hasFilters && (
                     <button
                         onClick={clearFilters}
+                        className="exp-clear-btn"
                         style={{
                             background: 'transparent', border: '1px solid var(--erp-danger)',
                             color: 'var(--erp-danger)', borderRadius: 'var(--radius-sm)',
@@ -105,9 +118,9 @@ const ExpenseFilters = ({
                     </button>
                 )}
 
-                <div style={{ width: 1, height: 24, background: 'var(--erp-border)', margin: '0 4px' }}></div>
+                <div className="exp-divider" style={{ width: 1, height: 24, background: 'var(--erp-border)', margin: '0 4px' }}></div>
 
-                
+
             </div>
         </div>
     );

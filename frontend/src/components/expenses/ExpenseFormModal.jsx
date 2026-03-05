@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Receipt, UploadCloud, AlertCircle, Tag, Calendar, IndianRupee, FileText, Loader2, CheckCircle2 } from 'lucide-react';
 import { useToast } from '../Toast';
-import axios from 'axios';
-import { API_BASE_URL } from '../../api/apiConfig';
+import apiClient from '../../api/apiConfig';
 
 const ExpenseFormModal = ({ isOpen, onClose, onSuccess, expense = null }) => {
     const { toast } = useToast();
@@ -73,16 +72,11 @@ const ExpenseFormModal = ({ isOpen, onClose, onSuccess, expense = null }) => {
 
         setLoading(true);
         try {
-            const api = axios.create({
-                baseURL: `${API_BASE_URL}/api`,
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            });
-
             if (!expense) {
-                await api.post('/expenses', form);
+                await apiClient.post('/expenses', form);
                 toast.success('Expense recorded successfully');
             } else {
-                await api.put(`/expenses/${expense._id}`, form);
+                await apiClient.put(`/expenses/${expense._id}`, form);
                 toast.success('Expense updated successfully');
             }
             onSuccess();

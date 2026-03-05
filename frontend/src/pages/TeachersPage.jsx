@@ -17,12 +17,7 @@ import TeacherFormModal from '../components/teachers/TeacherFormModal';
 import TeacherBulkImportModal from '../components/teachers/TeacherBulkImportModal';
 import TeacherPayrollConfigModal from '../components/teachers/TeacherPayrollConfigModal';
 
-import { API_BASE_URL } from '../api/apiConfig';
-
-const API = () => axios.create({
-    baseURL: `${API_BASE_URL}/api`,
-    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-});
+import apiClient, { API_BASE_URL } from '../api/apiConfig';
 const fmt = n => (Number(n) || 0).toLocaleString('en-IN');
 const imgSrc = p => {
     if (!p) return null;
@@ -90,7 +85,7 @@ const TeachersPage = () => {
             if (statusFilt && statusFilt !== 'all') params.status = statusFilt;
             if (batchFilt) params.batchId = batchFilt;
 
-            const { data } = await API().get('/teachers', { params });
+            const { data } = await apiClient.get('/teachers', { params });
 
             if (page === 1) {
                 setTeachers(data.teachers || []);
@@ -123,8 +118,8 @@ const TeachersPage = () => {
     }, [search, statusFilt, batchFilt]);
 
     useEffect(() => {
-        API().get('/batches').then(({ data }) => setBatches(data.batches)).catch(() => { });
-        API().get('/teachers/summary').then(({ data }) => setSummary(data)).catch(() => { });
+        apiClient.get('/batches').then(({ data }) => setBatches(data.batches)).catch(() => { });
+        apiClient.get('/teachers/summary').then(({ data }) => setSummary(data)).catch(() => { });
     }, []);
 
     const openCreate = () => { setEditTeacher(null); setFormMode('create'); setShowForm(true); };
@@ -134,17 +129,17 @@ const TeachersPage = () => {
     const handleSave = () => {
         setShowForm(false);
         load();
-        API().get('/teachers/summary').then(({ data }) => setSummary(data)).catch(() => { });
+        apiClient.get('/teachers/summary').then(({ data }) => setSummary(data)).catch(() => { });
     };
 
     const confirmDelete = async pwd => {
         setDelLoading(true); setDelError('');
         try {
-            await API().delete(`/teachers/${delTeacher._id}`, { data: { adminPassword: pwd } });
+            await apiClient.delete(`/teachers/${delTeacher._id}`, { data: { adminPassword: pwd } });
             toast.success(`"${delTeacher.name}" deleted`);
             setShowDel(false); setDelTeacher(null);
             load();
-            API().get('/teachers/summary').then(({ data }) => setSummary(data)).catch(() => { });
+            apiClient.get('/teachers/summary').then(({ data }) => setSummary(data)).catch(() => { });
         } catch (e) { setDelError(e.response?.data?.message || 'Delete failed. Check your password.'); }
         finally { setDelLoading(false); }
     };
@@ -297,7 +292,6 @@ const TeachersPage = () => {
                         onClose={() => setViewTeacher(null)}
                         fmt={fmt}
                         imgSrc={imgSrc}
-                        API={API}
                     />
                 )
             }
@@ -307,7 +301,7 @@ const TeachersPage = () => {
                     <TeacherFormModal
                         mode={formMode} teacher={editTeacher} batches={batches}
                         toast={toast} onSave={handleSave} onClose={() => setShowForm(false)}
-                        API={API} imgSrc={imgSrc}
+                        imgSrc={imgSrc}
                     />
                 )
             }
@@ -326,7 +320,6 @@ const TeachersPage = () => {
                     onClose={() => setPayrollTeacher(null)}
                     onSave={load}
                     toast={toast}
-                    API={API}
                 />
             )}
 
@@ -352,11 +345,11 @@ const TeachersPage = () => {
                     setBulkSaving(true);
                     setBulkImportErr('');
                     try {
-                        const { data } = await API().post('/teachers/bulk', { teachers: bulkFile, adminPassword: pwd });
+                        const { data } = await apiClient.post('/teachers/bulk', { teachers: bulkFile, adminPassword: pwd });
                         setBulkResults(data);
                         toast.success(`${data.success} teachers imported!`);
                         load();
-                        API().get('/teachers/summary').then(({ data }) => setSummary(data)).catch(() => { });
+                        apiClient.get('/teachers/summary').then(({ data }) => setSummary(data)).catch(() => { });
 
                         if (data.failed === 0) {
                             setTimeout(() => {

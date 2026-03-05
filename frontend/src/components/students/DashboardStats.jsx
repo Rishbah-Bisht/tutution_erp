@@ -1,7 +1,8 @@
 import React from 'react';
 import { Users, UserCheck, CreditCard, Calendar } from 'lucide-react';
+import { SkeletonStat } from '../common/SkeletonLoaders';
 
-const DashboardStats = ({ stats }) => {
+const DashboardStats = ({ stats, loading }) => {
     const STAT_CARDS = [
         {
             label: 'Total Students',
@@ -40,7 +41,14 @@ const DashboardStats = ({ stats }) => {
 
     return (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20, marginBottom: 24 }}>
-            {STAT_CARDS.map((card, i) => (
+            {loading ? (
+                <>
+                    <SkeletonStat />
+                    <SkeletonStat />
+                    <SkeletonStat />
+                    <SkeletonStat />
+                </>
+            ) : STAT_CARDS.map((card, i) => (
                 <div key={i} style={{
                     padding: '20px', background: '#fff', borderRadius: 'var(--radius-md)',
                     border: '1px solid var(--erp-border)', boxShadow: 'var(--shadow-sm)',

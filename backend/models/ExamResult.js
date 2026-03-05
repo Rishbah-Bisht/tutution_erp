@@ -5,6 +5,7 @@ const examResultSchema = new mongoose.Schema({
     studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Student', required: true },
     batchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Batch', required: true },
     marksObtained: { type: Number, required: true, min: 0 },
+    isPresent: { type: Boolean, default: true },
     remarks: { type: String, trim: true, default: '' },
     uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Teacher' }, // null = admin
     uploadedAt: { type: Date, default: Date.now }

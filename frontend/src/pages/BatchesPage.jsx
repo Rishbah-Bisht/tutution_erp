@@ -12,14 +12,10 @@ import ActionModal from '../components/common/ActionModal';
 import AlertMessage from '../components/common/AlertMessage';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { SkeletonTable } from '../components/common/SkeletonLoaders';
 
 // ── API helper ───────────────────────────────────────────────
-import { API_BASE_URL } from '../api/apiConfig';
-
-const API = () => axios.create({
-    baseURL: `${API_BASE_URL}/api`,
-    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-});
+import apiClient from '../api/apiConfig';
 
 // Dynamically fallback from user's global config
 const getDynamicClasses = () => {
@@ -36,7 +32,8 @@ const getDynamicClasses = () => {
 const EMPTY_FORM = {
     name: '', course: '', capacity: 30, subjects: [],
     classroom: '', schedule: [], fees: '',
-    startDate: '', endDate: ''
+    startDate: '', endDate: '',
+    schedulerConfig: { daysCount: 6, timings: ['09:00', '10:00', '11:00'] }
 };
 
 // ══════════════════════════════════════════════════════════════
@@ -44,7 +41,7 @@ const EMPTY_FORM = {
 // ══════════════════════════════════════════════════════════════
 const TimetableGrid = ({ days, timeSlots, classroom, occupancy, selected, onToggle }) => {
     const getOccupant = (day, time) => occupancy?.[classroom]?.[day]?.[time] || null;
-    const isSelected = (day, time) => selected.some(s => s.day === day && s.time === time);
+    const getSelectedSlot = (day, time) => selected.find(s => s.day === day && s.time === time);
 
     return (
         <div style={{ overflowX: 'auto' }}>
@@ -76,29 +73,40 @@ const TimetableGrid = ({ days, timeSlots, classroom, occupancy, selected, onTogg
                             </td>
                             {days.map(day => {
                                 const occupant = getOccupant(day, time);
-                                const selected_ = isSelected(day, time);
-                                const locked = !!occupant;
+                                const selectedSlot = getSelectedSlot(day, time);
+                                const selected_ = !!selectedSlot;
+                                const locked = !!occupant && !selected_; // If we selected it, it's not locked to us
+                                const isOtherRoom = selectedSlot && selectedSlot.room && selectedSlot.room !== classroom;
 
                                 return (
                                     <td key={day} style={{ border: '1px solid var(--erp-border)', padding: 0 }}>
                                         <div
-                                            title={locked ? `Occupied by: ${occupant}` : selected_ ? 'Click to deselect' : 'Click to select'}
-                                            onClick={() => !locked && onToggle(day, time)}
+                                            title={isOtherRoom ? `Selected in ${selectedSlot.room}` : locked ? `Occupied by: ${occupant} (Click to overwrite/merge)` : selected_ ? 'Click to deselect' : 'Click to select'}
+                                            onClick={() => onToggle(day, time)}
                                             style={{
                                                 width: '100%', height: 32,
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                cursor: locked ? 'not-allowed' : 'pointer',
+                                                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                                                cursor: 'pointer',
                                                 background: locked
                                                     ? '#f1f5f9'
                                                     : selected_
-                                                        ? 'var(--erp-primary)'
+                                                        ? (isOtherRoom ? '#64748b' : 'var(--erp-primary)')
                                                         : '#fff',
                                                 transition: 'background 0.15s',
-                                                position: 'relative'
+                                                position: 'relative',
+                                                lineHeight: 1
                                             }}
                                         >
-                                            {locked && <Lock size={11} color="#94a3b8" />}
-                                            {!locked && selected_ && <CheckCircle2 size={12} color="#fff" />}
+                                            {locked && !selected_ && <Lock size={11} color="#94a3b8" />}
+                                            {selected_ && (
+                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+                                                    <span style={{ fontSize: '0.55rem', color: '#fff', fontWeight: 700, textAlign: 'center', padding: '0 2px', lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
+                                                        {selectedSlot.subject || 'Lec'}
+                                                    </span>
+                                                    {isOtherRoom && <span style={{ fontSize: '0.45rem', color: '#f8fafc', fontWeight: 600 }}>{selectedSlot.room}</span>}
+                                                    {selectedSlot.isMerged && <span style={{ fontSize: '0.4rem', color: '#cbd5e1', fontStyle: 'italic' }}>SHARED</span>}
+                                                </div>
+                                            )}
                                         </div>
                                     </td>
                                 );
@@ -111,6 +119,10 @@ const TimetableGrid = ({ days, timeSlots, classroom, occupancy, selected, onTogg
                 <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <span style={{ width: 14, height: 14, background: 'var(--erp-primary)', borderRadius: 3, display: 'inline-block' }} />
                     Selected
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ width: 14, height: 14, background: '#64748b', borderRadius: 3, display: 'inline-block' }} />
+                    Selected (Other Room)
                 </span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <span style={{ width: 14, height: 14, background: '#f1f5f9', border: '1px solid var(--erp-border)', borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -126,8 +138,6 @@ const TimetableGrid = ({ days, timeSlots, classroom, occupancy, selected, onTogg
         </div>
     );
 };
-
-// Inline PasswordModal and DeleteModal implementation removed in favor of reusable ActionModal
 
 // ══════════════════════════════════════════════════════════════
 // Batch Row
@@ -225,6 +235,7 @@ const BatchesPage = () => {
     const [subjLoading, setSubjLoading] = useState(false);
     const [occLoading, setOccLoading] = useState(false);
     const [isAutoScheduling, setIsAutoScheduling] = useState(false);
+    const [activeSubject, setActiveSubject] = useState(null);
 
     // ── Form state ───────────────────────────────────────────
     const [form, setForm] = useState(EMPTY_FORM);
@@ -256,7 +267,7 @@ const BatchesPage = () => {
             if (apiCourse) params.course = apiCourse;
             if (search) params.search = search;
 
-            const { data } = await API().get('/batches', { params });
+            const { data } = await apiClient.get('/batches', { params });
 
             if (page === 1) {
                 setBatches(data.batches || []);
@@ -278,7 +289,7 @@ const BatchesPage = () => {
 
     // ── Load scheduler config ────────────────────────────────
     useEffect(() => {
-        API().get('/scheduler/config')
+        apiClient.get('/scheduler/config')
             .then(({ data }) => setConfig(data))
             .catch(() => toast.warning('Could not load scheduler config'));
     }, []);
@@ -291,18 +302,23 @@ const BatchesPage = () => {
     useEffect(() => {
         if (!form.course) { setSubjects([]); return; }
         setSubjLoading(true);
-        API().get(`/batches/courses/${encodeURIComponent(form.course)}/subjects`)
-            .then(({ data }) => setSubjects(data.subjects))
+        apiClient.get(`/batches/courses/${encodeURIComponent(form.course)}/subjects`)
+            .then(({ data }) => {
+                setSubjects(data.subjects);
+                if (data.subjects.length > 0 && !activeSubject) {
+                    setActiveSubject(data.subjects[0]);
+                }
+            })
             .catch(() => setSubjects([]))
             .finally(() => setSubjLoading(false));
-    }, [form.course]);
+    }, [form.course, activeSubject]);
 
     // ── Load occupancy when classroom changes ────────────────
     useEffect(() => {
         if (!form.classroom) { setOccupancy({}); return; }
         setOccLoading(true);
         const params = editingBatch ? { excludeBatchId: editingBatch._id } : {};
-        API().get('/batches/room-occupancy', { params })
+        apiClient.get('/batches/room-occupancy', { params })
             .then(({ data }) => setOccupancy(data.occupancy))
             .catch(() => setOccupancy({}))
             .finally(() => setOccLoading(false));
@@ -329,7 +345,8 @@ const BatchesPage = () => {
             fees: batch.fees || '',
             teacher: batch.teacher || '',
             startDate: batch.startDate ? new Date(batch.startDate).toISOString().split('T')[0] : '',
-            endDate: batch.endDate ? new Date(batch.endDate).toISOString().split('T')[0] : ''
+            endDate: batch.endDate ? new Date(batch.endDate).toISOString().split('T')[0] : '',
+            schedulerConfig: batch.schedulerConfig || { daysCount: 6, timings: ['09:00', '10:00', '11:00'] }
         });
         setEditingBatch(batch);
         setModalMode('edit');
@@ -350,43 +367,24 @@ const BatchesPage = () => {
 
     // ── Slot toggle ───────────────────────────────────────────
     const toggleSlot = (day, time) => {
+        if (!activeSubject) return toast.error('Please select a subject from the list first');
         setForm(f => {
             const exists = f.schedule.some(s => s.day === day && s.time === time);
             return {
                 ...f,
                 schedule: exists
                     ? f.schedule.filter(s => !(s.day === day && s.time === time))
-                    : [...f.schedule, { day, time }]
+                    : [...f.schedule, { day, time, room: f.classroom, subject: activeSubject }]
             };
         });
-    };
-
-    // ── Auto-Schedule (AI) ────────────────────────────────────
-    const handleAutoSchedule = async () => {
-        if (!form.classroom) return toast.error('Please select a classroom first');
-        setIsAutoScheduling(true);
-        try {
-            const { data } = await API().post('/scheduler/auto', {
-                classroom: form.classroom,
-                subjects: form.subjects,
-                excludeBatchId: editingBatch?._id
-            });
-            if (data.schedule) {
-                setForm(f => ({ ...f, schedule: data.schedule }));
-                toast.success('Smart schedule generated! ✨');
-            }
-        } catch (e) {
-            toast.error(e.response?.data?.message || 'Failed to auto-schedule');
-        } finally {
-            setIsAutoScheduling(false);
-        }
     };
 
     // ── Save (CREATE) ─────────────────────────────────────────
     const handleCreate = async () => {
         setFormSaving(true);
         try {
-            await API().post('/batches', form);
+            const { schedulerConfig, ...payload } = form;
+            await apiClient.post('/batches', payload);
             toast.success(`Batch "${form.name}" created successfully!`);
             closeModal();
             loadBatches();
@@ -397,7 +395,8 @@ const BatchesPage = () => {
 
     // ── Save (UPDATE) — open password modal first ─────────────
     const handleUpdateIntent = () => {
-        pendingFormRef.current = { ...form };
+        const { schedulerConfig, ...payload } = form;
+        pendingFormRef.current = payload;
         setPwdError('');
         setShowPwdModal(true);
     };
@@ -405,7 +404,7 @@ const BatchesPage = () => {
     const confirmUpdate = async (password) => {
         setPwdLoading(true); setPwdError('');
         try {
-            await API().put(`/batches/${editingBatch._id}`, { ...pendingFormRef.current, adminPassword: password });
+            await apiClient.put(`/batches/${editingBatch._id}`, { ...pendingFormRef.current, adminPassword: password });
             toast.success(`Batch "${form.name}" updated!`);
             setShowPwdModal(false);
             closeModal();
@@ -433,7 +432,7 @@ const BatchesPage = () => {
     const confirmDelete = async (password) => {
         setDelLoading(true); setDelError('');
         try {
-            await API().delete(`/batches/${delBatch._id}`, { data: { adminPassword: password } });
+            await apiClient.delete(`/batches/${delBatch._id}`, { data: { adminPassword: password } });
             toast.success(`Batch "${delBatch.name}" deleted`);
             setShowDelModal(false);
             setDelBatch(null);
@@ -444,6 +443,51 @@ const BatchesPage = () => {
     };
 
     const fmt = n => (n || 0).toLocaleString('en-IN');
+
+    const generateTimetablePDF = () => {
+        if (!form.schedule || form.schedule.length === 0) {
+            toast.error('No schedule slots to export');
+            return;
+        }
+
+        const doc = new jsPDF('landscape');
+
+        // Header
+        doc.setFontSize(22);
+        doc.setTextColor(15, 23, 42);
+        doc.text(`Timetable: ${form.name || 'Untitled Batch'}`, 14, 22);
+
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Course: ${form.course || 'N/A'}`, 14, 28);
+        doc.text(`Classroom: ${form.classroom || 'N/A'}`, 14, 33);
+        doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 38);
+
+        // Prepare table data
+        const head = ['TIME', ...config.days];
+        const body = config.timeSlots.map(time => {
+            const row = [time];
+            config.days.forEach(day => {
+                const slot = form.schedule.find(s => s.day === day && s.time === time);
+                row.push(slot ? `${slot.subject}\n(${slot.room})` : '—');
+            });
+            return row;
+        });
+
+        autoTable(doc, {
+            startY: 45,
+            head: [head],
+            body: body,
+            headStyles: { fillColor: [15, 23, 42], fontSize: 9, fontStyle: 'bold', halign: 'center' },
+            styles: { fontSize: 8, cellPadding: 3, halign: 'center', valign: 'middle', overflow: 'linebreak' },
+            alternateRowStyles: { fillColor: [248, 250, 252] },
+            margin: { top: 40 },
+            theme: 'grid'
+        });
+
+        doc.save(`Timetable_${form.name || 'Batch'}_${new Date().toISOString().slice(0, 10)}.pdf`);
+        toast.success('Timetable downloaded! 📅');
+    };
 
     const exportData = () => {
         if (batches.length === 0) {
@@ -491,10 +535,27 @@ const BatchesPage = () => {
     // ═══════════════════════════════════════════════════════════
     return (
         <ERPLayout title="Batch Management">
+            <style>{`
+                @media (max-width: 640px) {
+                    .batches-hdr { flex-direction: column !important; align-items: flex-start !important; gap: 16px !important; }
+                    .batches-hdr .flex { width: 100% !important; flex-direction: column !important; }
+                    .batches-hdr button { width: 100% !important; justify-content: center !important; }
+                    .batches-tb { padding: 12px !important; gap: 10px !important; }
+                    .batches-tb .tb-search-wrap { width: 100% !important; }
+                    .batches-tb select { width: 100% !important; min-width: 100% !important; }
+                    .batches-tb button { width: 100% !important; }
+                    
+                    .b-modal-header { padding: 16px 20px !important; }
+                    .b-modal-body { padding: 20px !important; }
+                    .b-grid-2 { flex-direction: column !important; gap: 16px !important; }
+                    .b-footer { flex-direction: column-reverse !important; gap: 12px !important; }
+                    .b-footer button { width: 100% !important; justify-content: center !important; }
+                }
+            `}</style>
             <ToastContainer toasts={toasts} onRemove={removeToast} />
 
             {/* ── Page Header ─────────────────────────────── */}
-            <div className="page-hdr">
+            <div className="page-hdr batches-hdr">
                 <div>
                     <h1>Batch Management</h1>
                     <p>{total} batch{total !== 1 ? 'es' : ''} configured</p>
@@ -514,7 +575,7 @@ const BatchesPage = () => {
             </div>
 
             {/* ── Filter Bar ──────────────────────────────── */}
-            <div className="card toolbar rounded-xl" style={{ marginBottom: 20 }}>
+            <div className="card toolbar rounded-xl batches-tb" style={{ marginBottom: 20 }}>
                 <div className="tb-search-wrap">
                     <Search size={15} />
                     <input className="tb-search" placeholder="Search batch name or course…"
@@ -536,7 +597,7 @@ const BatchesPage = () => {
             {/* ── Batch Table ──────────────────────────────── */}
             <div className="card">
                 {loading && page === 1 ? (
-                    <div className="loader-wrap"><div className="spinner" /><p>Loading batches…</p></div>
+                    <SkeletonTable rows={8} />
                 ) : batches.length === 0 ? (
                     <div className="empty">
                         <div className="empty-icon">
@@ -616,7 +677,7 @@ const BatchesPage = () => {
                         }}>
 
                             {/* --- PREMIUM BATCH FORM HEADER (Dark Theme like Image) --- */}
-                            <header style={{
+                            <header className="b-modal-header" style={{
                                 padding: '24px 32px',
                                 background: '#0f172a',
                                 position: 'relative',
@@ -626,18 +687,18 @@ const BatchesPage = () => {
                                 alignItems: 'center',
                                 flexShrink: 0
                             }}>
-                                <BookOpen size={120} style={{ position: 'absolute', right: -10, bottom: -30, opacity: 0.05 }} />
+                                <BookOpen size={120} style={{ position: 'absolute', right: -10, bottom: -30, opacity: 0.05 }} className="hide-mobile" />
 
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 20, position: 'relative', zIndex: 1 }}>
-                                    <div style={{ width: 56, height: 56, background: 'rgba(255,255,255,0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(255,255,255,0.2)' }}>
+                                    <div style={{ width: 56, height: 56, background: 'rgba(255,255,255,0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(255,255,255,0.2)' }} className="hide-mobile">
                                         <BookOpen size={28} />
                                     </div>
                                     <div>
-                                        <h2 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0 }}>
-                                            {modalMode === 'edit' ? 'Update Academic Batch' : 'Create New Batch'}
+                                        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>
+                                            {modalMode === 'edit' ? 'Update Batch' : 'New Batch'}
                                         </h2>
-                                        <p style={{ margin: 0, opacity: 0.8, fontSize: '0.9rem' }}>
-                                            {modalMode === 'edit' ? `Modifying configuration for ${editingBatch?.name}` : 'Setup a new teaching group and timetable'}
+                                        <p style={{ margin: 0, opacity: 0.8, fontSize: '0.8rem' }}>
+                                            {modalMode === 'edit' ? `Editing: ${editingBatch?.name}` : 'Setup teaching group'}
                                         </p>
                                     </div>
                                 </div>
@@ -645,15 +706,15 @@ const BatchesPage = () => {
                                 <button type="button" onClick={closeModal} style={{
                                     background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)',
                                     borderRadius: '8px', color: '#fff', padding: '10px 20px', cursor: 'pointer',
-                                    fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem',
+                                    fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.75rem',
                                     position: 'relative', zIndex: 1
                                 }}>
-                                    <X size={18} /> CLOSE
+                                    <X size={18} /> <span className="hide-mobile">CLOSE</span>
                                 </button>
                             </header>
 
                             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                                <div className="modal-body" style={{ flex: 1, overflowY: 'auto', padding: '32px' }}>
+                                <div className="modal-body b-modal-body" style={{ flex: 1, overflowY: 'auto', padding: '32px' }}>
 
                                     {/* ── Basic Info Section ── */}
                                     <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -661,7 +722,7 @@ const BatchesPage = () => {
                                         <div style={{ flex: 1, height: '1px', background: '#f1f5f9' }}></div>
                                     </div>
 
-                                    <div style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
+                                    <div className="b-grid-2" style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
                                         <div style={{ flex: 1 }}>
                                             <label style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Batch Name *</label>
                                             <input
@@ -686,7 +747,7 @@ const BatchesPage = () => {
                                         </div>
                                     </div>
 
-                                    <div style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
+                                    <div className="b-grid-2" style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
                                         <div style={{ flex: 1 }}>
                                             <label style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Fees (₹ / Month)</label>
                                             <input
@@ -711,7 +772,7 @@ const BatchesPage = () => {
                                         </div>
                                     </div>
 
-                                    <div style={{ display: 'flex', gap: 20, marginBottom: 30 }}>
+                                    <div className="b-grid-2" style={{ display: 'flex', gap: 20, marginBottom: 30 }}>
                                         <div style={{ flex: 1 }}>
                                             <label style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Batch Start Date</label>
                                             <input
@@ -750,69 +811,166 @@ const BatchesPage = () => {
                                                 <Loader2 size={16} className="spin" /> Loading subjects…
                                             </div>
                                         ) : (
-                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-                                                {subjects.map(sub => {
-                                                    const checked = form.subjects.includes(sub);
-                                                    return (
-                                                        <button key={sub} type="button" onClick={() => toggleSubject(sub)}
-                                                            style={{
-                                                                padding: '8px 16px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', transition: '0.2s',
-                                                                background: checked ? '#0f172a' : '#fff',
-                                                                color: checked ? '#fff' : '#475569',
-                                                                border: `1.5px solid ${checked ? '#0f172a' : '#cbd5e1'}`,
-                                                            }}>
-                                                            {sub}
-                                                        </button>
-                                                    );
-                                                })}
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                                                {/* 1. Subjects available for this Course */}
+                                                <div>
+                                                    <label style={{ fontSize: '0.65rem', fontWeight: 800, color: '#64748b', display: 'block', marginBottom: 8, textTransform: 'uppercase' }}>Select Subjects for Batch</label>
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                                        {subjects.map(sub => {
+                                                            const isAdded = form.subjects.includes(sub);
+                                                            return (
+                                                                <button key={sub} type="button" onClick={() => toggleSubject(sub)}
+                                                                    style={{
+                                                                        padding: '6px 12px', borderRadius: '16px', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', transition: '0.2s',
+                                                                        background: isAdded ? '#0f172a' : '#fff',
+                                                                        color: isAdded ? '#fff' : '#475569',
+                                                                        border: `1px solid ${isAdded ? '#0f172a' : '#cbd5e1'}`,
+                                                                    }}>
+                                                                    {sub}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                        {/* Custom Subject Input */}
+                                                        <div style={{ display: 'flex', gap: 4 }}>
+                                                            <input
+                                                                id="customSubInput"
+                                                                placeholder="Add custom..."
+                                                                style={{ padding: '6px 12px', borderRadius: '16px', fontSize: '0.75rem', border: '1px solid #cbd5e1', width: 100 }}
+                                                                onKeyDown={e => {
+                                                                    if (e.key === 'Enter') {
+                                                                        e.preventDefault();
+                                                                        const val = e.target.value.trim();
+                                                                        if (val && !form.subjects.includes(val)) {
+                                                                            setForm(f => ({ ...f, subjects: [...f.subjects, val] }));
+                                                                            e.target.value = '';
+                                                                        }
+                                                                    }
+                                                                }}
+                                                            />
+                                                            <button type="button" className="btn btn-outline btn-sm" style={{ borderRadius: '50%', padding: 0, width: 28, height: 28 }}
+                                                                onClick={() => {
+                                                                    const input = document.getElementById('customSubInput');
+                                                                    const val = input.value.trim();
+                                                                    if (val && !form.subjects.includes(val)) {
+                                                                        setForm(f => ({ ...f, subjects: [...f.subjects, val] }));
+                                                                        input.value = '';
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <Plus size={14} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* 2. Active Painting Subject Selection */}
+                                                {form.subjects.length > 0 && (
+                                                    <div style={{ padding: '14px', background: 'rgba(79, 70, 229, 0.05)', borderRadius: '10px', border: '1px dashed #4f46e5' }}>
+                                                        <label style={{ fontSize: '0.65rem', fontWeight: 800, color: '#4f46e5', display: 'block', marginBottom: 8, textTransform: 'uppercase' }}>Select Active Subject for Timetable Painting</label>
+                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                                            {form.subjects.map(sub => {
+                                                                const isActive = activeSubject === sub;
+                                                                return (
+                                                                    <button key={sub} type="button" onClick={() => setActiveSubject(sub)}
+                                                                        style={{
+                                                                            padding: '6px 14px', borderRadius: '16px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', transition: '0.2s',
+                                                                            background: isActive ? '#4f46e5' : '#fff',
+                                                                            color: isActive ? '#fff' : '#4f46e5',
+                                                                            border: `1.5px solid ${isActive ? '#4f46e5' : '#e0e7ff'}`,
+                                                                            boxShadow: isActive ? '0 4px 6px -1px rgba(79, 70, 229, 0.2)' : 'none'
+                                                                        }}>
+                                                                        {isActive && <CheckCircle2 size={11} style={{ marginRight: 4 }} />}
+                                                                        {sub}
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>
 
-                                    {/* ── Timetable Section ── */}
+                                    {/* ── Classroom & Timetable Section ── */}
                                     <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
                                         Classroom & Timetable
                                         <div style={{ flex: 1, height: '1px', background: '#f1f5f9' }}></div>
                                     </div>
 
-                                    <div style={{ maxWidth: 300, marginBottom: 20 }}>
-                                        <label style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Select Classroom</label>
-                                        <select
-                                            style={{ width: '100%', padding: '12px 16px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', marginTop: 6, background: '#fff' }}
-                                            className="erp-input"
-                                            value={form.classroom}
-                                            onChange={e => setForm(f => ({ ...f, classroom: e.target.value, schedule: [] }))}
-                                        >
-                                            <option value="">Select classroom…</option>
-                                            {config.classrooms.map(r => <option key={r} value={r}>{r}</option>)}
-                                        </select>
+                                    <div className="b-grid-2" style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
+                                        <div style={{ flex: 1 }}>
+                                            <label style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Working Classroom</label>
+                                            <select
+                                                style={{ width: '100%', padding: '12px 16px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', marginTop: 6, background: '#fff' }}
+                                                className="erp-input"
+                                                value={form.classroom}
+                                                onChange={e => setForm(f => ({ ...f, classroom: e.target.value }))}
+                                            >
+                                                <option value="">Select classroom...</option>
+                                                {config.classrooms.map(r => <option key={r} value={r}>{r}</option>)}
+                                            </select>
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <label style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Days Per Week</label>
+                                            <select
+                                                style={{ width: '100%', padding: '12px 16px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', marginTop: 6, background: '#fff' }}
+                                                className="erp-input"
+                                                value={form.schedulerConfig?.daysCount || 6}
+                                                onChange={e => setForm(f => ({ ...f, schedulerConfig: { ...f.schedulerConfig, daysCount: parseInt(e.target.value) } }))}
+                                            >
+                                                {[1, 2, 3, 4, 5, 6, 7].map(d => <option key={d} value={d}>{d} Days</option>)}
+                                            </select>
+                                        </div>
                                     </div>
+
+                                    {form.classroom && (
+                                        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20, marginBottom: 24, borderLeft: '4px solid #0f172a' }}>
+                                            <div>
+                                                <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                    <Calendar size={16} /> Manual Schedule Builder
+                                                </h4>
+                                                <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#64748b' }}>
+                                                    Select an <strong>Active Subject</strong> from the bubbles above, then click slots in the grid to assign.
+                                                </p>
+                                            </div>
+
+                                            {subjects.length > 0 && (
+                                                <div style={{ marginTop: 12, padding: '8px 12px', background: '#eef2ff', borderRadius: 6, border: '1px solid #e0e7ff', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#4f46e5' }} />
+                                                    <p style={{ margin: 0, fontSize: '0.7rem', color: '#4338ca', fontWeight: 600 }}>
+                                                        Currently painting with: <strong>{activeSubject || 'None'}</strong>
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
 
                                     {form.classroom && (
                                         <div style={{ animation: 'fadeIn 0.3s ease' }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                                                 <p style={{ fontSize: '0.85rem', color: '#64748b', margin: 0 }}>
-                                                    Click slots to schedule — <strong>{form.schedule.length}</strong> selected
+                                                    Current Timetable Preview — <strong>{form.schedule.length}</strong> slots active
                                                 </p>
-                                                <button type="button" onClick={handleAutoSchedule} disabled={isAutoScheduling}
-                                                    style={{ padding: '8px 16px', background: '#0f172a', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                    {isAutoScheduling ? <Loader2 size={14} className="spin" /> : '✨ AUTO-SCHEDULE'}
+                                                <button type="button" onClick={generateTimetablePDF} className="btn btn-outline btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                    <FileDown size={14} /> Download Timetable PDF
                                                 </button>
                                             </div>
-                                            <TimetableGrid
-                                                days={config.days}
-                                                timeSlots={config.timeSlots}
-                                                classroom={form.classroom}
-                                                occupancy={occupancy}
-                                                selected={form.schedule}
-                                                onToggle={toggleSlot}
-                                            />
+                                            <div className="erp-table-wrap" style={{ border: 'none', background: 'transparent' }}>
+                                                <TimetableGrid
+                                                    days={config.days}
+                                                    timeSlots={config.timeSlots}
+                                                    classroom={form.classroom}
+                                                    occupancy={occupancy}
+                                                    selected={form.schedule}
+                                                    onToggle={toggleSlot}
+                                                />
+                                            </div>
                                         </div>
                                     )}
                                 </div>
 
                                 {/* --- FOOTER (Like Image) --- */}
-                                <div style={{ padding: '24px 32px', borderTop: '1px solid #f1f5f9', display: 'flex', gap: 16, background: '#fff' }}>
+                                <div className="b-footer" style={{ padding: '24px 32px', borderTop: '1px solid #f1f5f9', display: 'flex', gap: 16, background: '#fff' }}>
                                     <button type="button" onClick={closeModal} style={{ padding: '0 40px', height: 52, borderRadius: '8px', border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontWeight: 800, cursor: 'pointer', fontSize: '0.9rem' }}>
                                         CANCEL
                                     </button>

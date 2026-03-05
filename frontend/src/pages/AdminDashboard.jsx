@@ -12,6 +12,7 @@ import {
     Loader2,
     Calendar
 } from 'lucide-react';
+import { SkeletonStat, SkeletonTable } from '../components/common/SkeletonLoaders';
 
 const fmt = (n) => n?.toLocaleString('en-IN') ?? '—';
 const fmtDay = (d) => new Date(d).toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' });
@@ -42,14 +43,7 @@ const AdminDashboard = () => {
         { label: 'Fees Collected', value: `₹${fmt(data.totalFeesPaid)}`, sub: 'collected so far', icon: IndianRupee, cls: 'ic-indigo' },
     ] : [];
 
-    if (loading) return (
-        <ERPLayout title="Dashboard">
-            <div className="loader-wrap">
-                <Loader2 className="spinner" size={40} />
-                <p>Loading dashboard…</p>
-            </div>
-        </ERPLayout>
-    );
+    if (!data && !loading) return null;
 
     return (
         <ERPLayout title="Dashboard">
@@ -68,7 +62,14 @@ const AdminDashboard = () => {
 
             {/* Stats Grid */}
             <div className="stats-grid">
-                {stats.map(s => {
+                {loading && !data ? (
+                    <>
+                        <SkeletonStat />
+                        <SkeletonStat />
+                        <SkeletonStat />
+                        <SkeletonStat />
+                    </>
+                ) : stats.map(s => {
                     const Icon = s.icon;
                     return (
                         <div className="stat-card" key={s.label}>
@@ -86,41 +87,45 @@ const AdminDashboard = () => {
             </div>
 
             {/* Recent Admissions */}
-            <div className="card" style={{ padding: 24 }}>
-                <div style={{ fontWeight: 800, color: 'var(--erp-primary)', marginBottom: 24, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div className="card" style={{ padding: '24px 20px' }}>
+                <div style={{ fontWeight: 800, color: 'var(--erp-primary)', marginBottom: 20, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 10 }}>
                     <UserPlus size={20} style={{ color: 'var(--erp-accent)' }} /> Recent Admissions
                 </div>
-                {data?.recentAdmissions?.length ? (
-                    <table className="erp-table">
-                        <thead>
-                            <tr style={{ background: '#f8fafc' }}>
-                                <th style={{ borderRadius: '2px 0 0 2px' }}>Student</th>
-                                <th>Joined</th>
-                                <th style={{ borderRadius: '0 2px 2px 0' }}>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {data.recentAdmissions.map(s => (
-                                <tr key={s._id}>
-                                    <td>
-                                        <div className="td-bold" style={{ fontSize: '0.85rem' }}>{s.name}</div>
-                                        <div className="td-sm">{s.rollNo || '—'}</div>
-                                    </td>
-                                    <td className="td-sm">
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
-                                            <Calendar size={12} style={{ color: '#64748b' }} /> {fmtDate(s.joinedAt)}
-                                        </div>
-                                    </td>
-                                    <td>
-                                        {s.feesPaid >= s.fees && s.fees > 0
-                                            ? <span className="badge badge-active">Fully Paid</span>
-                                            : <span className="badge badge-unpaid">Pending</span>
-                                        }
-                                    </td>
+                {loading && !data ? (
+                    <SkeletonTable rows={5} />
+                ) : data?.recentAdmissions?.length ? (
+                    <div className="erp-table-wrap">
+                        <table className="erp-table">
+                            <thead>
+                                <tr style={{ background: '#f8fafc' }}>
+                                    <th style={{ borderRadius: '2px 0 0 2px' }}>Student</th>
+                                    <th>Joined</th>
+                                    <th style={{ borderRadius: '0 2px 2px 0' }}>Status</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {data.recentAdmissions.map(s => (
+                                    <tr key={s._id}>
+                                        <td>
+                                            <div className="td-bold" style={{ fontSize: '0.85rem' }}>{s.name}</div>
+                                            <div className="td-sm">{s.rollNo || '—'}</div>
+                                        </td>
+                                        <td className="td-sm">
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                                                <Calendar size={12} style={{ color: '#64748b' }} /> {fmtDate(s.joinedAt)}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            {s.feesPaid >= s.fees && s.fees > 0
+                                                ? <span className="badge badge-active">Fully Paid</span>
+                                                : <span className="badge badge-unpaid">Pending</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 ) : (
                     <div className="empty" style={{ height: 240 }}>
                         <GraduationCap size={48} style={{ opacity: 0.2, marginBottom: 12 }} />

@@ -1,13 +1,15 @@
 const jwt = require('jsonwebtoken');
 const SECRET = process.env.JWT_SECRET || 'supersecretkey_for_erp_app';
-const ADMIN_SECRET = process.env.JWT_SECRET || 'secret_key';
+
+// Export the secret so controllers can use the SAME key for signing
+exports.JWT_SECRET = SECRET;
 
 exports.adminAuth = (req, res, next) => {
     const auth = req.headers.authorization;
     if (!auth || !auth.startsWith('Bearer ')) return res.status(401).json({ message: 'No token provided' });
     try {
         const token = auth.split(' ')[1];
-        req.admin = jwt.verify(token, ADMIN_SECRET);
+        req.admin = jwt.verify(token, SECRET);
         next();
     } catch {
         res.status(401).json({ message: 'Invalid token' });

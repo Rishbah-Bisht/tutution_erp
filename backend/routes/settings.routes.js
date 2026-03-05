@@ -32,6 +32,7 @@ router.get('/', async (req, res) => {
         });
 
     } catch (err) {
+        console.error('[SettingsAPIError]', err);
         res.status(500).json({ message: 'Settings API error', error: err.message });
     }
 });

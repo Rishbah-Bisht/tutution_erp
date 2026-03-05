@@ -15,6 +15,8 @@ const headingColor = '#0f172a';
 
 // --- Internal UI Components ---
 
+import apiClient from '../../api/apiConfig';
+
 const SectionDivider = ({ label, color = 'var(--erp-primary)', icon: Icon }) => (
     <div style={{
         fontSize: '0.72rem', fontWeight: 800, color, textTransform: 'uppercase',
@@ -114,7 +116,7 @@ const CurrentMonthBanner = ({ salary, onGenerate, generating, selectedMonth }) =
     );
 };
 
-const TeacherPayrollConfigModal = ({ teacher, onClose, onSave, toast, API }) => {
+const TeacherPayrollConfigModal = ({ teacher, onClose, onSave, toast }) => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
@@ -138,8 +140,8 @@ const TeacherPayrollConfigModal = ({ teacher, onClose, onSave, toast, API }) => 
         if (!teacher) return;
         const currentMonth = selectedMonth;
         Promise.all([
-            API().get(`/payroll/profile/${teacher._id}`).catch(err => ({ err })),
-            API().get(`/payroll/salaries?monthYear=${currentMonth}`).catch(() => ({ data: [] }))
+            apiClient.get(`/payroll/profile/${teacher._id}`).catch(err => ({ err })),
+            apiClient.get(`/payroll/salaries?monthYear=${currentMonth}`).catch(() => ({ data: [] }))
         ]).then(([profileRes, salariesRes]) => {
             if (profileRes?.data && !profileRes.err) {
                 setFormData(prev => ({
@@ -157,7 +159,7 @@ const TeacherPayrollConfigModal = ({ teacher, onClose, onSave, toast, API }) => 
             const found = salaries.find(s => s.teacherId?._id === teacher._id || s.teacherId === teacher._id);
             setCurrentMonthSalary(found || false);
         }).finally(() => setLoading(false));
-    }, [teacher, API, toast, selectedMonth]);
+    }, [teacher, toast, selectedMonth]);
 
     const [generating, setGenerating] = useState(false);
 
@@ -165,10 +167,10 @@ const TeacherPayrollConfigModal = ({ teacher, onClose, onSave, toast, API }) => 
         const monthYear = selectedMonth;
         setGenerating(true);
         try {
-            await API().post('/payroll/bulk-generate', { ids: [teacher._id], monthYear });
+            await apiClient.post('/payroll/bulk-generate', { ids: [teacher._id], monthYear });
             toast.success('Salary record generated successfully!');
             // Refresh salary status
-            const salariesRes = await API().get(`/payroll/salaries?monthYear=${monthYear}`);
+            const salariesRes = await apiClient.get(`/payroll/salaries?monthYear=${monthYear}`);
             const salaries = salariesRes?.data || [];
             const found = salaries.find(s => s.teacherId?._id === teacher._id || s.teacherId === teacher._id);
             setCurrentMonthSalary(found || false);
@@ -184,7 +186,7 @@ const TeacherPayrollConfigModal = ({ teacher, onClose, onSave, toast, API }) => 
         e.preventDefault();
         setSaving(true);
         try {
-            await API().post(`/payroll/profile/${teacher._id}`, formData);
+            await apiClient.post(`/payroll/profile/${teacher._id}`, formData);
             toast.success('Payroll profile saved successfully!');
             onSave(); // Optional callback to refresh parent list
             onClose();

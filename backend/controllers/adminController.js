@@ -1,6 +1,7 @@
 const Admin = require('../models/Admin');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { JWT_SECRET } = require('../middleware/auth.middleware');
 
 // Check if admin exists
 exports.checkAdmin = async (req, res) => {
@@ -8,6 +9,7 @@ exports.checkAdmin = async (req, res) => {
         const adminCount = await Admin.countDocuments();
         res.status(200).json({ exists: adminCount > 0 });
     } catch (error) {
+        console.error('[CheckAdminError]', error);
         res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
@@ -68,27 +70,30 @@ exports.signup = async (req, res) => {
 // Login Logic
 exports.login = async (req, res) => {
     try {
-        const { identifier, password } = req.body; // identifier can be adminName or email
-
+        const { identifier, password } = req.body;
         // 1. Find admin by name or email
+        console.log('[Login] Attempt for identifier:', identifier);
         const admin = await Admin.findOne({
             $or: [{ adminName: identifier }, { email: identifier }]
         });
 
         if (!admin) {
+            console.warn('[Login] Admin not found for:', identifier);
             return res.status(400).json({ message: 'Invalid credentials' });
         }
 
         // 2. Compare password
         const isMatch = await bcrypt.compare(password, admin.password);
         if (!isMatch) {
+            console.warn('[Login] Password mismatch for:', identifier);
             return res.status(400).json({ message: 'Invalid credentials' });
         }
+        console.log('[Login] Success for:', identifier);
 
         // 3. Generate JWT
         const token = jwt.sign(
             { id: admin._id },
-            process.env.JWT_SECRET || 'secret_key',
+            JWT_SECRET,
             { expiresIn: '2h' }
         );
 

@@ -67,11 +67,18 @@ const StudentFormModal = ({
       alignItems: 'center', justifyContent: 'center', padding: '20px'
     }} onClick={(e) => e.target === e.currentTarget && onClose()}>
 
-      {/* CSS for Focus States */}
+      {/* Responsive Styles */}
       <style>{`
         input:focus, select:focus, textarea:focus {
           border-color: #059669 !important;
           box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1) !important;
+        }
+        @media (max-width: 640px) {
+          .modal-body { padding: 20px !important; }
+          .modal-hdr-p { padding: 16px 20px !important; }
+          .form-grid-2 { grid-template-columns: 1fr !important; }
+          .flex-mob-stack { flex-direction: column !important; }
+          .photo-upload-wrap { margin-bottom: 20px !important; margin-right: 0 !important; }
         }
       `}</style>
 
@@ -83,27 +90,27 @@ const StudentFormModal = ({
       }}>
 
         {/* --- TOP BAR --- */}
-        <header style={{
+        <header className="modal-hdr-p" style={{
           width: '100%', padding: '24px 32px', background: '#0f172a',
           position: 'relative', color: '#fff', display: 'flex',
           justifyContent: 'space-between', alignItems: 'center', flexShrink: 0
         }}>
-          <GraduationCap size={120} style={{ position: 'absolute', right: -20, bottom: -30, opacity: 0.1, color: '#fff' }} />
+          <GraduationCap size={120} style={{ position: 'absolute', right: -20, bottom: -30, opacity: 0.1, color: '#fff' }} className="hide-mobile" />
           <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{
               width: 52, height: 52, borderRadius: '8px',
               background: 'rgba(255,255,255,0.1)', overflow: 'hidden',
               border: '1px solid rgba(255,255,255,0.2)', display: 'flex',
               alignItems: 'center', justifyContent: 'center'
-            }}>
+            }} className="hide-mobile">
               <GraduationCap size={24} color="#fff" />
             </div>
             <div>
-              <h2 style={{ fontSize: '1.4rem', fontWeight: 800, margin: 0 }}>
-                {selectedStudent ? 'Update Student Record' : 'Fresh Admission'}
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>
+                {selectedStudent ? 'Update Student' : 'Admission'}
               </h2>
-              <div style={{ fontSize: '0.8rem', opacity: 0.85 }}>
-                {selectedStudent ? `Updating details for ${selectedStudent?.name}` : 'Register a new student'}
+              <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>
+                {selectedStudent ? `Updating ${selectedStudent?.name}` : 'Register a new student'}
               </div>
             </div>
           </div>
@@ -112,7 +119,7 @@ const StudentFormModal = ({
             borderRadius: '8px', color: '#fff', padding: '8px 16px', cursor: 'pointer',
             display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.75rem', fontWeight: 700
           }}>
-            <X size={16} /> CLOSE
+            <X size={16} /> <span className="hide-mobile">CLOSE</span>
           </button>
         </header>
 
@@ -128,13 +135,13 @@ const StudentFormModal = ({
 
             {step === 1 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                <div style={{ display: 'flex', gap: 24 }}>
+                <div style={{ display: 'flex', gap: 24 }} className="flex-mob-stack">
                   {/* Photo Upload */}
-                  <div style={{ flexShrink: 0, textAlign: 'center' }}>
+                  <div style={{ flexShrink: 0, textAlign: 'center' }} className="photo-upload-wrap">
                     <div style={{
                       width: 100, height: 100, borderRadius: '8px', border: '2px dashed #cbd5e1',
                       display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9',
-                      overflow: 'hidden', position: 'relative', cursor: 'pointer'
+                      overflow: 'hidden', position: 'relative', cursor: 'pointer', margin: '0 auto'
                     }} onClick={() => document.getElementById('studentPhotoInput').click()}>
                       {form.profileImage ? (
                         <img src={URL.createObjectURL(form.profileImage)} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -154,7 +161,7 @@ const StudentFormModal = ({
                       <label style={{ fontWeight: 800, fontSize: '0.7rem', color: '#475569' }}>FULL NAME *</label>
                       <input name="name" value={form.name} onChange={handleForm} placeholder="John Doe" required style={inputStyle} />
                     </div>
-                    <div style={{ display: 'flex', gap: 16 }}>
+                    <div style={{ display: 'flex', gap: 16 }} className="flex-mob-stack">
                       <div style={{ flex: 1 }}>
                         <label style={{ fontWeight: 800, fontSize: '0.7rem', color: '#475569' }}>DATE OF BIRTH</label>
                         <input type="date" name="dob" value={form.dob} onChange={handleForm} style={inputStyle} />
@@ -172,7 +179,7 @@ const StudentFormModal = ({
                 </div>
 
                 {/* Contact Info */}
-                <div style={{ display: 'flex', gap: 16 }}>
+                <div style={{ display: 'flex', gap: 16 }} className="flex-mob-stack">
                   <div style={{ flex: 1 }}>
                     <label style={{ fontWeight: 800, fontSize: '0.7rem', color: '#475569' }}>MOBILE NUMBER</label>
                     <input name="phone" value={form.phone} onChange={handleForm} placeholder="+91 0000000000" style={inputStyle} />
@@ -184,7 +191,7 @@ const StudentFormModal = ({
                 </div>
 
                 {/* Parents Info */}
-                <div style={{ display: 'flex', gap: 16 }}>
+                <div style={{ display: 'flex', gap: 16 }} className="flex-mob-stack">
                   <div style={{ flex: 1 }}>
                     <label style={{ fontWeight: 800, fontSize: '0.7rem', color: '#475569' }}>FATHER'S NAME</label>
                     <input type="text" name="fatherName" value={form.fatherName} onChange={handleForm} placeholder="Father's Full Name" style={inputStyle} />
@@ -213,7 +220,7 @@ const StudentFormModal = ({
 
             {step === 2 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                <div style={{ display: 'flex', gap: 16 }}>
+                <div style={{ display: 'flex', gap: 16 }} className="flex-mob-stack">
                   <div style={{ flex: 1 }}>
                     <label style={{ fontWeight: 800, fontSize: '0.7rem', color: '#475569' }}>STANDARD / COURSE</label>
                     <select name="className" value={form.className} onChange={handleForm} style={inputStyle}>
@@ -262,7 +269,7 @@ const StudentFormModal = ({
                 </div>
 
                 {/* Fees and Status */}
-                <div style={{ display: 'flex', gap: 16 }}>
+                <div style={{ display: 'flex', gap: 16 }} className="flex-mob-stack">
                   <div style={{ flex: 1 }}>
                     <label style={{ fontWeight: 800, fontSize: '0.7rem', color: '#475569' }}>MONTHLY FEE (₹)</label>
                     <input type="number" name="fees" value={form.fees} onChange={handleForm} readOnly={!!form.batchId} style={{ ...inputStyle, background: form.batchId ? '#f1f5f9' : '#fff' }} />
@@ -273,7 +280,7 @@ const StudentFormModal = ({
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: 16 }}>
+                <div style={{ display: 'flex', gap: 16 }} className="flex-mob-stack">
                   <div style={{ flex: 1 }}>
                     <label style={{ fontWeight: 800, fontSize: '0.7rem', color: '#475569' }}>ACADEMIC SESSION</label>
                     <input type="text" name="session" value={form.session} onChange={handleForm} placeholder="2026-2027" style={inputStyle} />
@@ -299,7 +306,7 @@ const StudentFormModal = ({
           {/* --- FOOTER --- */}
           <div className="modal-footer" style={{
             borderTop: '1px solid #e2e8f0',
-            padding: '24px 32px',
+            padding: '20px 32px',
             display: 'flex',
             background: '#fff',
             borderBottomLeftRadius: '12px',
@@ -335,6 +342,9 @@ const StudentFormModal = ({
     }
     .btn-success:active:not(:disabled) {
       transform: translateY(0);
+    }
+    @media (max-width: 640px) {
+      .modal-footer { padding: 16px 20px !important; }
     }
   `}</style>
 

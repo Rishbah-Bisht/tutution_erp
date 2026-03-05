@@ -2,7 +2,7 @@ const Student = require('../models/Student');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-const SECRET = process.env.JWT_SECRET || 'supersecretkey_for_erp_app';
+const { JWT_SECRET } = require('../middleware/auth.middleware');
 
 // ── POST /api/student/login ───────────────────────────────────────────────────
 exports.login = async (req, res) => {
@@ -19,7 +19,7 @@ exports.login = async (req, res) => {
         if (!valid)
             return res.status(401).json({ message: 'Invalid credentials' });
 
-        const token = jwt.sign({ id: student._id, role: 'student' }, SECRET, { expiresIn: '2h' });
+        const token = jwt.sign({ id: student._id, role: 'student' }, JWT_SECRET, { expiresIn: '2h' });
 
         // Send profile without password
         const profile = student.toObject();

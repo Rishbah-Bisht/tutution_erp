@@ -11,17 +11,13 @@ import ERPLayout from '../components/ERPLayout';
 import ToastContainer, { useToast } from '../components/Toast';
 import ReceiptPreviewModal from '../components/fees/ReceiptPreviewModal';
 import { API_BASE_URL } from '../api/apiConfig';
+import apiClient from '../api/apiConfig';
 
 // --- Theme Constants ---
 const primaryColor = '#064e3b'; // Dark Emerald
 const sharpRadius = '8px';
 const borderColor = '#e2e8f0';
 const headingColor = '#0f172a'; // Dark Slate
-
-const API = () => axios.create({
-    baseURL: `${API_BASE_URL}/api`,
-    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-});
 
 const StatCard = ({ title, value, icon: Icon, color, bg }) => (
     <div className="card" style={{ padding: 24, display: 'flex', alignItems: 'center', gap: 16, borderRadius: sharpRadius, border: `1px solid ${borderColor}` }}>
@@ -60,14 +56,14 @@ const TeacherPayrollDashboard = () => {
     const fetchDashboard = (month) => {
         setLoadingStats(true);
         const query = month ? `?monthYear=${month}` : '';
-        API().get(`/payroll/dashboard${query}`)
+        apiClient.get(`/payroll/dashboard${query}`)
             .then(res => setStats(res.data))
             .catch(() => toast.error('Failed to load payroll stats'))
             .finally(() => setLoadingStats(false));
     };
 
     const fetchSalaries = () => {
-        API().get(`/payroll/salaries?monthYear=${monthFilter}`)
+        apiClient.get(`/payroll/salaries?monthYear=${monthFilter}`)
             .then(res => setSalaries(res.data))
             .catch(() => toast.error('Failed to load salaries'));
     };
@@ -75,7 +71,7 @@ const TeacherPayrollDashboard = () => {
     useEffect(() => {
         if (!localStorage.getItem('token')) return;
         fetchDashboard(monthFilter);
-        API().get('/teachers').then(res => setTeachers(res.data.teachers || [])).catch(console.error);
+        apiClient.get('/teachers').then(res => setTeachers(res.data.teachers || [])).catch(console.error);
     }, []);
 
     useEffect(() => {
@@ -88,7 +84,7 @@ const TeacherPayrollDashboard = () => {
         if (!window.confirm(`Generate salaries for ${monthFilter}?`)) return;
         setIsGenerating(true);
         try {
-            const res = await API().post('/payroll/generate', { monthYear: monthFilter });
+            const res = await apiClient.post('/payroll/generate', { monthYear: monthFilter });
             toast.success(res.data.message);
             fetchDashboard(monthFilter);
             fetchSalaries();
@@ -125,7 +121,7 @@ const TeacherPayrollDashboard = () => {
         }
         setPayLoading(true);
         try {
-            await API().post(`/payroll/pay/${selectedSalary._id}`, {
+            await apiClient.post(`/payroll/pay/${selectedSalary._id}`, {
                 adminPassword,
                 ...payData
             });
@@ -278,9 +274,26 @@ const TeacherPayrollDashboard = () => {
 
     return (
         <ERPLayout title="Teacher Payroll">
+            <style>{`
+                @media (max-width: 640px) {
+                    .payroll-hdr { flex-direction: column !important; align-items: flex-start !important; gap: 16px !important; }
+                    .payroll-hdr .flex { width: 100% !important; flex-direction: column !important; }
+                    .payroll-hdr button { width: 100% !important; justify-content: center !important; }
+                    .payroll-stats { grid-template-columns: 1fr !important; }
+                    .p-ledger-card { padding: 16px !important; }
+                    .p-ledger-hdr { flex-direction: column !important; align-items: flex-start !important; gap: 12px !important; }
+                    
+                    /* Disburse Modal Responsive */
+                    .d-modal { width: 100% !important; height: 100% !important; max-height: 100% !important; border-radius: 0 !important; }
+                    .d-modal-header { padding: 16px 20px !important; }
+                    .d-modal-body { padding: 20px !important; }
+                    .d-footer { flex-direction: column-reverse !important; padding: 20px !important; }
+                    .d-footer button { width: 100% !important; }
+                }
+            `}</style>
             <ToastContainer toasts={toasts} onRemove={removeToast} />
 
-            <div className="page-hdr">
+            <div className="page-hdr payroll-hdr">
                 <div>
                     <h1 style={{ fontWeight: 900, color: headingColor }}>Teacher Payroll</h1>
                     <p style={{ color: '#64748b', fontSize: '0.9rem' }}>Manage monthly salaries, process payments, and generate slips.</p>
@@ -294,7 +307,7 @@ const TeacherPayrollDashboard = () => {
                         style={{ padding: '8px 16px', background: '#fff', border: `1.5px solid ${borderColor}`, borderRadius: sharpRadius, fontWeight: 700 }}
                     />
                     <button className="btn btn-primary" onClick={handleGenerateSalaries} disabled={isGenerating}
-                        style={{ background: primaryColor, borderRadius: sharpRadius, fontWeight: 800, padding: '0 24px', boxShadow: '0 4px 12px rgba(6,78,59,0.2)' }}>
+                        style={{ background: primaryColor, borderRadius: sharpRadius, fontWeight: 800, padding: '10px 24px', boxShadow: '0 4px 12px rgba(6,78,59,0.2)' }}>
                         {isGenerating ? <Loader2 size={16} className="spin" /> : <Save size={16} />}
                         Auto-Generate {monthFilter}
                     </button>
@@ -304,7 +317,7 @@ const TeacherPayrollDashboard = () => {
             {loadingStats ? (
                 <div className="loader-wrap"><div className="spinner" /></div>
             ) : stats && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 20, marginBottom: 32 }}>
+                <div className="payroll-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 20, marginBottom: 32 }}>
                     <StatCard title="Profiles Set" value={`${stats.teachersWithProfiles}/${stats.totalTeachers}`} icon={Users} color="#059669" bg="#ecfdf5" />
                     <StatCard title="Liability" value={`₹${stats.totalLiability.toLocaleString()}`} icon={DollarSign} color="#2563eb" bg="#eff6ff" />
                     <StatCard title="Disbursed" value={`₹${stats.totalPaid.toLocaleString()}`} icon={CheckCircle2} color="#059669" bg="#ecfdf5" />
@@ -312,8 +325,8 @@ const TeacherPayrollDashboard = () => {
                 </div>
             )}
 
-            <div className="card" style={{ padding: 32, borderRadius: sharpRadius, border: `1px solid ${borderColor}` }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, borderBottom: `1px solid ${borderColor}`, paddingBottom: 16 }}>
+            <div className="card p-ledger-card" style={{ padding: 32, borderRadius: sharpRadius, border: `1px solid ${borderColor}` }}>
+                <div className="p-ledger-hdr" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, borderBottom: `1px solid ${borderColor}`, paddingBottom: 16 }}>
                     <h2 style={{ fontSize: '1.1rem', fontWeight: 900, color: headingColor, display: 'flex', alignItems: 'center', gap: 10 }}>
                         <History size={20} color={primaryColor} /> Monthly Payout Ledger ({monthFilter})
                     </h2>
@@ -391,7 +404,7 @@ const TeacherPayrollDashboard = () => {
                                                     setAdminPassword('');
                                                     setShowPayModal(true);
                                                     try {
-                                                        const res = await API().get(`/payroll/profile/${salary.teacherId._id}`);
+                                                        const res = await apiClient.get(`/payroll/profile/${salary.teacherId._id}`);
                                                         setSelectedTeacherProfile(res.data);
                                                     } catch (e) { console.error(e); }
                                                 }}>
@@ -417,14 +430,14 @@ const TeacherPayrollDashboard = () => {
                     backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex',
                     alignItems: 'center', justifyContent: 'center', padding: '20px'
                 }} onClick={e => e.target === e.currentTarget && setShowPayModal(false)}>
-                    <div className="modal" style={{
+                    <div className="modal d-modal" style={{
                         width: '80%', maxWidth: '800px', maxHeight: '90vh',
                         background: '#fff', borderRadius: sharpRadius, overflow: 'hidden',
                         display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
                         position: 'relative'
                     }} onClick={e => e.stopPropagation()}>
 
-                        <header style={{
+                        <header className="d-modal-header" style={{
                             width: '100%', padding: '24px 32px', background: primaryColor,
                             position: 'relative', color: '#fff', display: 'flex',
                             justifyContent: 'space-between', alignItems: 'center', flexShrink: 0
@@ -445,7 +458,7 @@ const TeacherPayrollDashboard = () => {
                         </header>
 
                         <form onSubmit={handleProcessPayment} style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-                            <div className="modal-body" style={{ padding: '32px' }}>
+                            <div className="modal-body d-modal-body" style={{ padding: '32px' }}>
                                 <div style={{ padding: '24px', background: '#f8fafc', borderRadius: sharpRadius, border: `1px solid ${borderColor}`, textAlign: 'center', marginBottom: 24 }}>
                                     <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em' }}>REMAINING BALANCE</div>
                                     <div style={{ fontSize: '2.5rem', fontWeight: 900, color: primaryColor }}>₹{(selectedSalary.netSalary - (selectedSalary.totalPaid || 0)).toLocaleString()}</div>
@@ -499,7 +512,7 @@ const TeacherPayrollDashboard = () => {
                                 </div>
                             </div>
 
-                            <div style={{ padding: '24px 32px', borderTop: `1px solid ${borderColor}`, background: '#f8fafc', display: 'flex', gap: 12 }}>
+                            <div className="d-footer" style={{ padding: '24px 32px', borderTop: `1px solid ${borderColor}`, background: '#f8fafc', display: 'flex', gap: 12 }}>
                                 <button type="button" onClick={() => setShowPayModal(false)} style={{ flex: 1, height: 44, borderRadius: sharpRadius, border: `1px solid ${borderColor}`, background: '#fff', color: '#64748b', fontWeight: 800, fontSize: '0.75rem', cursor: 'pointer' }}>CANCEL</button>
                                 <button type="submit" disabled={payLoading} style={{ flex: 2, height: 44, background: payLoading ? '#94a3b8' : primaryColor, color: '#fff', borderRadius: sharpRadius, border: 'none', fontWeight: 900, fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                                     {payLoading ? <Loader2 size={16} className="spin" /> : <ShieldCheck size={18} />}

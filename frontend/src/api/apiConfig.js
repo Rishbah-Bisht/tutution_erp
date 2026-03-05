@@ -1,11 +1,15 @@
 import axios from 'axios';
 
-// Dynamic API Base URL logic for deployment
 const getBaseUrl = () => {
-    if (import.meta.env.VITE_API_BASE_URL) return import.meta.env.VITE_API_BASE_URL;
-
+    if (import.meta.env.VITE_API_BASE_URL !== undefined) {
+        return import.meta.env.VITE_API_BASE_URL;
+    }
     // Fallback for local development
-    return 'http://localhost:5000';
+    if (import.meta.env.DEV) {
+        return 'http://localhost:5000';
+    }
+    // Production fallback (same domain)
+    return '';
 };
 
 export const API_BASE_URL = getBaseUrl().replace(/\/$/, '');

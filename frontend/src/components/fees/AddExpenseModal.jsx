@@ -1,13 +1,6 @@
 import React, { useState } from 'react';
 import { X, PlusCircle, IndianRupee, Loader2 } from 'lucide-react';
-import axios from 'axios';
-
-import { API_BASE_URL } from '../../api/apiConfig';
-
-const API = () => axios.create({
-    baseURL: `${API_BASE_URL}/api`,
-    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-});
+import apiClient from '../../api/apiConfig';
 
 const AddExpenseModal = ({ fee, onClose, onSave }) => {
     const [saving, setSaving] = useState(false);
@@ -29,7 +22,7 @@ const AddExpenseModal = ({ fee, onClose, onSave }) => {
         setSaving(true);
         setError('');
         try {
-            await API().post(`/fees/${fee._id}/expense`, form);
+            await apiClient.post(`/fees/${fee._id}/expense`, form);
             onSave();
             onClose();
         } catch (err) {

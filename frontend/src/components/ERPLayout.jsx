@@ -88,7 +88,7 @@ const ERPLayout = ({ children, title }) => {
                     {!mini && (
                         <div style={{ overflow: 'hidden' }}>
                             <div className="sb-name">{admin.coachingName || 'Defacto ERP'}</div>
-                            <div className="sb-code">Reg. No.: {admin.registrationNumber || 'N/A'}</div>
+                            
                         </div>
                     )}
                 </div>
@@ -129,7 +129,7 @@ const ERPLayout = ({ children, title }) => {
                         className="tb-hamburger"
                         onClick={() => {
                             if (window.innerWidth <= 768) setMobileOpen(o => !o);
-                            else setMini(m => m);
+                            else setMini(m => !m);
                         }}
                     >
                         {mobileOpen ? <X size={18} /> : <Menu size={18} />}

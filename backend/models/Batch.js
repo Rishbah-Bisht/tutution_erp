@@ -7,7 +7,7 @@ const batchSchema = new mongoose.Schema({
     subjects: [{ type: String, trim: true }],
     classroom: { type: String, trim: true },
     // Structured schedule for conflict detection
-    schedule: [{ day: String, time: String, subject: String, teacher: String }],
+    schedule: [{ day: String, time: String, subject: String, teacher: String, room: { type: String, trim: true } }],
     // Legacy freeform display slots (kept for backward compat)
     timeSlots: [{ type: String, trim: true }],
     teacher: { type: String },
