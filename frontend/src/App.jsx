@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import axios from 'axios';
+import { Analytics } from '@vercel/analytics/react';
 import SignupPage from './pages/SignupPage';
 import LoginPage from './pages/LoginPage';
 import AdminDashboard from './pages/AdminDashboard';
@@ -75,6 +76,7 @@ function App() {
                 {/* Fallback */}
                 <Route path="/" element={<Navigate to="/login" replace />} />
             </Routes>
+            <Analytics />
         </Router>
     );
 }
