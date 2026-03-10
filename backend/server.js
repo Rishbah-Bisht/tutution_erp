@@ -3,6 +3,8 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
+const connectDB = require('./config/db');
+const errorHandler = require('./middleware/errorHandler');
 const rateLimit = require('express-rate-limit');
 
 const adminRoutes = require('./routes/adminRoutes');
@@ -24,6 +26,7 @@ const { startWorker: startNotificationWorker } = require('./services/notificatio
 // Portal auth routes
 const studentAuthRoutes = require('./routes/student.auth.routes');
 const teacherAuthRoutes = require('./routes/teacher.auth.routes');
+const demoRoutes = require('./routes/demo.routes');
 
 const app = express();
 
@@ -128,14 +131,10 @@ app.use('/api/exams', examRoutes);
 // Portal auth routes
 app.use('/api/student', studentAuthRoutes);
 app.use('/api/teacher', teacherAuthRoutes);
+app.use('/api/demo', demoRoutes);
 
 // Database Connection
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/erp_system';
-mongoose.connect(MONGODB_URI)
-    .then(() => console.log('✅ Connected to MongoDB'))
-    .catch(err => {
-        console.error('❌ MongoDB connection error:', err);
-    });
+connectDB();
 
 // 404 Handler for API
 app.use('/api', (req, res) => {
@@ -143,16 +142,7 @@ app.use('/api', (req, res) => {
 });
 
 // Error handling middleware
-app.use((err, req, res, next) => {
-    console.error(`[Global Error Handler] [${new Date().toISOString()}]`);
-    console.error('Path:', req.path);
-    console.error('Error:', err.stack || err.message);
-
-    res.status(err.status || 500).json({
-        message: err.message || 'Internal Server Error',
-        error: process.env.NODE_ENV === 'production' ? {} : (err.stack || err.message)
-    });
-});
+app.use(errorHandler);
 
 // Export for Vercel serverless
 module.exports = app;
