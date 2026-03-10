@@ -27,8 +27,8 @@
             "destination": "/backend/server.js"
         },
         {
-            "source": "/:path*",
-            "destination": "/frontend/$1"
+            "source": "/((?!api|admin|uploads).*)",
+            "destination": "/frontend/index.html"
         }
     ]
 }

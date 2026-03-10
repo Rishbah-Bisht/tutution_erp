@@ -28,8 +28,9 @@ const LoginPage = () => {
                 localStorage.setItem('admin', JSON.stringify(data.admin));
                 navigate('/dashboard');
             } else if (role === 'teacher') {
-                const res = await authApi.teacherLogin({ email: form.identifier, password: form.password });
+                const res = await authApi.teacherLogin({ regNo: form.identifier, password: form.password });
                 data = res.data;
+
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('role', 'teacher');
                 localStorage.setItem('teacher', JSON.stringify(data.teacher));

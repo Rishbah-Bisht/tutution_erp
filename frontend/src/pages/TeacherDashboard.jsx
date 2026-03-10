@@ -4,7 +4,8 @@ import axios from 'axios';
 import {
     Bell, BookOpen, Building2, Calendar, CheckCircle2, ChevronRight, Clock, FileText, IndianRupee, LayoutDashboard, LogOut, Mail, MapPin, Phone, Search, Settings, User, Wallet, Trophy, TrendingUp, Target, Loader2, BrainCircuit, ClipboardList
 } from 'lucide-react';
-import { API_BASE_URL } from '../api/apiConfig';
+import { API_BASE_URL, TEACHER_API_BASE_URL } from '../api/apiConfig';
+
 import TeacherSalaryProfile from '../components/teachers/TeacherSalaryProfile';
 
 const TeacherDashboard = () => {
@@ -26,7 +27,8 @@ const TeacherDashboard = () => {
     const fetchProfile = async () => {
         try {
             const token = localStorage.getItem('token');
-            const res = await axios.get(`${API_BASE_URL}/api/teacher/profile`, {
+            const res = await axios.get(`${TEACHER_API_BASE_URL}/api/teacher/profile`, {
+
                 headers: { Authorization: `Bearer ${token}` }
             });
             setProfileData(res.data);
@@ -44,9 +46,10 @@ const TeacherDashboard = () => {
         try {
             const token = localStorage.getItem('token');
             const [anaRes, impRes, scoRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/exams/batch/${batchId}/analytics`, { headers: { Authorization: `Bearer ${token}` } }),
-                axios.get(`${API_BASE_URL}/api/exams/batch/${batchId}/improvers`, { headers: { Authorization: `Bearer ${token}` } }),
-                axios.get(`${API_BASE_URL}/api/exams/batch/${batchId}/top-scorers`, { headers: { Authorization: `Bearer ${token}` } })
+                axios.get(`${TEACHER_API_BASE_URL}/api/exams/batch/${batchId}/analytics`, { headers: { Authorization: `Bearer ${token}` } }),
+                axios.get(`${TEACHER_API_BASE_URL}/api/exams/batch/${batchId}/improvers`, { headers: { Authorization: `Bearer ${token}` } }),
+                axios.get(`${TEACHER_API_BASE_URL}/api/exams/batch/${batchId}/top-scorers`, { headers: { Authorization: `Bearer ${token}` } })
+
             ]);
             setSelectedBatchAnalytics(anaRes.data);
             setBatchImprovers(impRes.data.improvers || []);

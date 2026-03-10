@@ -13,6 +13,8 @@ const getBaseUrl = () => {
 };
 
 export const API_BASE_URL = getBaseUrl().replace(/\/$/, '');
+export const TEACHER_API_BASE_URL = import.meta.env.VITE_TEACHER_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:5001' : API_BASE_URL);
+
 
 // Configured axios instance for generic API calls
 const apiClient = axios.create({
