@@ -33,7 +33,12 @@ const notificationSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['general', 'fee', 'attendance', 'homework', 'announcement', 'exam'],
+        enum: [
+            'general', 'fee', 'attendance', 'homework', 'announcement', 'exam',
+            'studentRegistration', 'feeGenerated', 'feePayment', 'batchAssignment',
+            'feeOverdue', 'examResult', 'teacherRegistration', 'salaryPaid',
+            'teacherBatchAssignment', 'testAnnouncement', 'surchargeAdded'
+        ],
         default: 'general'
     },
     studentId: {

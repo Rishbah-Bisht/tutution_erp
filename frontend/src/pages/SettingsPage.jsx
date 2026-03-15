@@ -15,17 +15,8 @@ const SettingsPage = () => {
         gmailEmail: '',
         gmailAppPassword: '',
         notificationsEnabled: true,
-        emailEvents: {
-            studentRegistration: false,
-            feeGenerated: false,
-            feePayment: false,
-            batchAssignment: false,
-            feeOverdue: false,
-            examResult: false,
-            teacherRegistration: false,
-            salaryPaid: false,
-            teacherBatchAssignment: false
-        }
+        emailEvents: {},
+        pushEvents: {}
     });
 
     // Wipe DB State
@@ -39,17 +30,8 @@ const SettingsPage = () => {
                     gmailEmail: data.gmailEmail || '',
                     gmailAppPassword: data.gmailAppPassword || '',
                     notificationsEnabled: data.notificationsEnabled !== undefined ? data.notificationsEnabled : true,
-                    emailEvents: {
-                        studentRegistration: data.emailEvents?.studentRegistration || false,
-                        feeGenerated: data.emailEvents?.feeGenerated || false,
-                        feePayment: data.emailEvents?.feePayment || false,
-                        batchAssignment: data.emailEvents?.batchAssignment || false,
-                        feeOverdue: data.emailEvents?.feeOverdue || false,
-                        examResult: data.emailEvents?.examResult || false,
-                        teacherRegistration: data.emailEvents?.teacherRegistration || false,
-                        salaryPaid: data.emailEvents?.salaryPaid || false,
-                        teacherBatchAssignment: data.emailEvents?.teacherBatchAssignment || false
-                    }
+                    emailEvents: data.emailEvents || {},
+                    pushEvents: data.pushEvents || {}
                 });
             })
             .catch(() => setAlert({ type: 'error', text: 'Failed to load settings.' }))
@@ -160,59 +142,52 @@ const SettingsPage = () => {
 
 
 
-                            <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200 mt-6 md:mt-0">
-                                <div className="mb-4">
-                                    <h3 className="block text-md font-bold text-gray-800 mb-1">Automatic Email Triggers</h3>
-                                    <p className="text-sm text-gray-500">Select which system events should automatically dispatch an email to the student.</p>
+                            {/* NOTIFICATION TRIGGERS */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                                <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '1rem', borderBottom: '1px solid #e2e8f0', paddingBottom: 8 }}>
+                                    Automated Triggers
                                 </div>
-
-                                <div className="flex flex-col gap-4">
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
                                     {[
-                                        { key: 'studentRegistration', label: 'Student Registration', desc: 'When a new student is admitted or registers.' },
-                                        { key: 'feeGenerated', label: 'Fee Generated', desc: 'When a monthly fee or ad-hoc fee is assigned.' },
-                                        { key: 'feePayment', label: 'Fee Payment', desc: 'When a payment is marked as collected.' },
-                                        { key: 'batchAssignment', label: 'Batch Assignment', desc: 'When a student is assigned to a batch.' },
-                                        { key: 'feeOverdue', label: 'Fee Overdue', desc: 'When a fee payment is past its due date.' },
-                                        { key: 'examResult', label: 'Exam Result', desc: 'When marks are published for an exam.' },
-                                        { key: 'teacherRegistration', label: 'Teacher Registration', desc: 'When a new faculty account is created.' },
-                                        { key: 'salaryPaid', label: 'Salary Paid', desc: 'When a teacher salary is marked as paid.' },
-                                        { key: 'teacherBatchAssignment', label: 'Teacher Batch Assignment', desc: 'When a teacher is assigned to a new batch.' }
+                                        { key: 'studentRegistration', label: 'Student Registration' },
+                                        { key: 'feeGenerated', label: 'Standard Fee Generated' },
+                                        { key: 'feePayment', label: 'Standard Fee Payment' },
+                                        { key: 'batchAssignment', label: 'Standard Batch Assignment' },
+                                        { key: 'feeOverdue', label: 'Standard Fee Overdue' },
+                                        { key: 'examResult', label: 'Standard Exam Result' },
+                                        { key: 'testAnnouncement', label: 'Test Announcement' },
+                                        { key: 'teacherRegistration', label: 'Faculty Registration' },
+                                        { key: 'salaryPaid', label: 'Faculty Salary Paid' },
                                     ].map((event) => (
-                                        <div className="flex items-center justify-between p-4 rounded-xl border border-gray-200 hover:border-blue-200 hover:bg-blue-50 transition-all duration-200">
-
-    <div className="flex flex-col">
-        <span className="font-semibold text-gray-800 text-sm">
-            {event.label}
-        </span>
-        <span className="text-xs text-gray-500 mt-1">
-            {event.desc}
-        </span>
-    </div>
-
-    <label className="relative inline-flex items-center cursor-pointer">
-
-        <input
-            type="checkbox"
-            className="sr-only peer"
-            checked={settings.emailEvents[event.key]}
-            onChange={() => handleEventToggle(event.key)}
-        />
-
-        <div className="w-11 h-6 bg-gray-300 rounded-full peer
-        peer-checked:bg-blue-600
-        peer-focus:ring-4 peer-focus:ring-blue-100
-        transition-all
-        after:content-['']
-        after:absolute after:top-[2px] after:left-[2px]
-        after:bg-white after:border after:border-gray-300
-        after:rounded-full after:h-5 after:w-5
-        after:transition-all
-        peer-checked:after:translate-x-full">
-        </div>
-
-    </label>
-
-</div>
+                                        <div key={event.key} style={{ padding: 16, background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                            <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.9rem' }}>{event.label}</div>
+                                            <div style={{ display: 'flex', gap: 12 }}>
+                                                <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '6px 10px', background: settings.emailEvents?.[event.key] ? '#ecfdf5' : '#f8fafc', borderRadius: 4, border: `1px solid ${settings.emailEvents?.[event.key] ? '#10b981' : '#e2e8f0'}` }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={settings.emailEvents?.[event.key] || false}
+                                                        onChange={() => setSettings({
+                                                            ...settings,
+                                                            emailEvents: { ...settings.emailEvents, [event.key]: !settings.emailEvents[event.key] }
+                                                        })}
+                                                        style={{ accentColor: '#059669' }}
+                                                    />
+                                                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: settings.emailEvents?.[event.key] ? '#059669' : '#64748b' }}>EMAIL</span>
+                                                </label>
+                                                <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '6px 10px', background: settings.pushEvents?.[event.key] ? '#eff6ff' : '#f8fafc', borderRadius: 4, border: `1px solid ${settings.pushEvents?.[event.key] ? '#3b82f6' : '#e2e8f0'}` }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={settings.pushEvents?.[event.key] || false}
+                                                        onChange={() => setSettings({
+                                                            ...settings,
+                                                            pushEvents: { ...(settings.pushEvents || {}), [event.key]: !settings.pushEvents?.[event.key] }
+                                                        })}
+                                                        style={{ accentColor: '#2563eb' }}
+                                                    />
+                                                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: settings.pushEvents?.[event.key] ? '#2563eb' : '#64748b' }}>PUSH</span>
+                                                </label>
+                                            </div>
+                                        </div>
                                     ))}
                                 </div>
                             </div>

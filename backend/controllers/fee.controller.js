@@ -231,6 +231,24 @@ exports.addOtherExpense = async (req, res) => {
         });
 
         await fee.save(); // pre-save calculates pending amount and totals
+
+        // Send notification for surcharge
+        const studentInfo = await Student.findById(fee.studentId).select('name email');
+        if (studentInfo) {
+            await triggerAutomaticNotification({
+                studentId: studentInfo._id,
+                message: `Hello ${studentInfo.name}, an additional expense of ₹${amount} (${title}) has been added to your fees for ${fee.month} ${fee.year}.`,
+                eventType: 'surchargeAdded',
+                adminId: req.admin?.id,
+                data: {
+                    amount,
+                    title,
+                    month: fee.month,
+                    year: fee.year
+                }
+            });
+        }
+
         res.json({ message: 'Special expense added successfully', fee });
     } catch (err) {
         console.error('Add Expense Error:', err);
@@ -306,6 +324,7 @@ exports.capturePayment = async (req, res) => {
         // Trigger fee payment notification
         const studentInfo = await Student.findById(fee.studentId).select('name email');
         if (studentInfo) {
+            console.log(`[FeeController] Triggering notification for ${studentInfo.name} - ${receiptNo}`);
             await triggerAutomaticNotification({
                 studentId: studentInfo._id,
                 message: `Hello ${studentInfo.name}, we have received your payment of ₹${paid} for receipt ${receiptNo}. Thank you!`,
@@ -313,9 +332,12 @@ exports.capturePayment = async (req, res) => {
                 adminId: req.admin?.id,
                 data: {
                     amountPaid: paid,
-                    receiptNo: receiptNo
+                    receiptNo: receiptNo,
+                    feeId: fee._id,
+                    paymentId: fee.paymentHistory[fee.paymentHistory.length - 1].paymentId
                 }
             });
+            console.log(`[FeeController] Notification trigger complete for ${receiptNo}`);
         }
 
         res.json({ message: 'Payment recorded successfully', fee, receiptNo });
@@ -400,12 +422,11 @@ async function _generateFeeRecords(students, month, year, dueDate) {
             const result = await Fee.insertMany(feeRecords, { ordered: false });
             count = result.length;
 
-            // Log fee generation activity for all newly generated fees.
-            const successfulFees = result;
-            successfulFees.forEach(async (fee) => {
+            // Log fee generation activity for all newly generated fees using Promise.all for reliability
+            await Promise.all(result.map(async (fee) => {
                 const student = eligibleStudents.find(s => s._id.toString() === fee.studentId.toString());
                 if (student) {
-                    await triggerAutomaticNotification({
+                    return triggerAutomaticNotification({
                         studentId: student._id,
                         message: `Hello ${student.name}, your monthly fee of ₹${fee.totalFee} has been generated for ${month} ${year}. Due date: ${fee.dueDate.toLocaleDateString()}. Please check your portal.`,
                         eventType: 'feeGenerated',
@@ -418,17 +439,17 @@ async function _generateFeeRecords(students, month, year, dueDate) {
                         }
                     });
                 }
-            });
+            })).catch(e => console.error('[FeeGenerationNotify] Some notifications failed:', e));
         }
     } catch (error) {
         count = error.result?.nInserted || 0;
 
         // Log the ones that succeeded even in a partial bulk failure.
         if (error.insertedDocs && error.insertedDocs.length > 0) {
-            error.insertedDocs.forEach(async (fee) => {
+            await Promise.all(error.insertedDocs.map(async (fee) => {
                 const student = eligibleStudents.find(s => s._id.toString() === fee.studentId.toString());
-                if (student && student.email) {
-                    await triggerAutomaticNotification({
+                if (student) {
+                    return triggerAutomaticNotification({
                         studentId: student._id,
                         message: `Hello ${student.name}, your monthly fee of ₹${fee.totalFee} has been generated for ${month} ${year}. Due date: ${fee.dueDate.toLocaleDateString()}. Please check your portal.`,
                         eventType: 'feeGenerated',
@@ -441,7 +462,7 @@ async function _generateFeeRecords(students, month, year, dueDate) {
                         }
                     });
                 }
-            });
+            })).catch(e => console.error('[FeeGenerationNotifyPartial] Some notifications failed:', e));
         }
     }
     return { count, skipped: skippedCount };
@@ -599,6 +620,24 @@ exports.addBulkSurcharge = async (req, res) => {
                 });
 
                 await fee.save();
+
+                // Send notification for surcharge
+                const studentInfo = await Student.findById(fee.studentId).select('name email');
+                if (studentInfo) {
+                    await triggerAutomaticNotification({
+                        studentId: studentInfo._id,
+                        message: `Hello ${studentInfo.name}, an additional expense of ₹${numericAmount} (${title}) has been added to your fees for ${fee.month} ${fee.year}.`,
+                        eventType: 'surchargeAdded',
+                        adminId: req.admin?.id,
+                        data: {
+                            amount: numericAmount,
+                            title,
+                            month: fee.month,
+                            year: fee.year
+                        }
+                    });
+                }
+
                 return { id, status: 'success' };
             } catch (e) {
                 return { id, status: 'failed', error: e.message };

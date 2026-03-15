@@ -1,6 +1,6 @@
 const nodemailer = require('nodemailer');
 
-exports.sendEmail = async ({ student, teacher, message, admin, subjectOverride }) => {
+exports.sendEmail = async ({ student, teacher, message, admin, subjectOverride, attachments }) => {
     const recipient = student || teacher;
     const recipientName = recipient?.name || 'Unknown';
 
@@ -31,7 +31,8 @@ exports.sendEmail = async ({ student, teacher, message, admin, subjectOverride }
             to: recipient.email,
             subject: subjectOverride || 'New Notification from Institute',
             html: message,
-            text: message.replace(/<[^>]*>/g, '') // Fallback: strip HTML tags for plain text
+            text: message.replace(/<[^>]*>/g, ''), // Fallback: strip HTML tags for plain text
+            attachments: attachments || []
         };
 
         const result = await transporter.sendMail(mailOptions);

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authApi from '../api/authApi';
-import { KeyRound, Eye, EyeOff, Loader2, AlertCircle, ArrowRight, ShieldCheck, Mail } from 'lucide-react';
+import { KeyRound, Eye, EyeOff, Loader2, AlertCircle, ArrowRight, ShieldCheck, Mail, Lock } from 'lucide-react';
 
 const INITIAL_FORM = {
     identifier: '',
@@ -40,284 +40,161 @@ const AdminLoginPage = () => {
     };
 
     return (
-        <div className="login-page-wrapper admin-login-wrapper">
-            <div className="bg-decoration top-left" style={{ background: 'radial-gradient(circle, rgba(139, 92, 246, 0.08) 0%, transparent 70%)' }} />
-            <div className="bg-decoration bottom-right" style={{ background: 'radial-gradient(circle, rgba(139, 92, 246, 0.08) 0%, transparent 70%)' }} />
+        // Animated Shifting Gradient Background
+        <div className="min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden bg-gradient-to-br from-indigo-50 via-white to-purple-50 font-sans" style={{ backgroundSize: '400% 400%', animation: 'gradientBG 15s ease infinite' }}>
+            
+            {/* --- INLINE CSS FOR HIGHLY VISIBLE ANIMATIONS --- */}
+            <style>
+                {`
+                    @keyframes gradientBG {
+                        0% { background-position: 0% 50%; }
+                        50% { background-position: 100% 50%; }
+                        100% { background-position: 0% 50%; }
+                    }
+                    @keyframes float-spin {
+                        0% { transform: translateY(100vh) rotate(0deg) scale(0.8); opacity: 0; }
+                        10% { opacity: 0.5; }
+                        90% { opacity: 0.5; }
+                        100% { transform: translateY(-20vh) rotate(360deg) scale(1.2); opacity: 0; }
+                    }
+                    @keyframes ripple {
+                        0% { transform: scale(0.8); opacity: 0.8; }
+                        100% { transform: scale(2.5); opacity: 0; }
+                    }
+                    @keyframes bounce-subtle {
+                        0%, 100% { transform: translateY(0); }
+                        50% { transform: translateY(-10px); }
+                    }
 
-            <div className="login-card admin-login-card">
-                <div style={{ textAlign: 'center', marginBottom: 32 }}>
-                    <div className="logo-container" style={{ background: 'linear-gradient(135deg, #4c1d95 0%, #8b5cf6 100%)', boxShadow: '0 10px 15px -3px rgba(139, 92, 246, 0.2)' }}>
-                        <ShieldCheck size={32} color="#fff" />
+                    /* Glass Shape Utilities */
+                    .glass-shape {
+                        position: absolute;
+                        background: rgba(255, 255, 255, 0.4);
+                        backdrop-filter: blur(8px);
+                        border: 1px solid rgba(255, 255, 255, 0.8);
+                        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+                        z-index: 0;
+                        animation: float-spin linear infinite;
+                    }
+                `}
+            </style>
+
+            {/* --- VISIBLE ANIMATED BACKGROUND ELEMENTS --- */}
+
+            {/* Pulsing Ripple Rings (Center) */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] rounded-full border border-indigo-200 pointer-events-none" style={{ animation: 'ripple 4s cubic-bezier(0.1, 0.5, 0.8, 1) infinite' }}></div>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] rounded-full border border-purple-200 pointer-events-none" style={{ animation: 'ripple 4s cubic-bezier(0.1, 0.5, 0.8, 1) infinite 1.5s' }}></div>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] rounded-full border border-blue-200 pointer-events-none" style={{ animation: 'ripple 4s cubic-bezier(0.1, 0.5, 0.8, 1) infinite 3s' }}></div>
+
+            {/* Floating Glass Squares & Circles */}
+            <div className="glass-shape rounded-2xl w-24 h-24 left-[10%]" style={{ animationDuration: '12s', animationDelay: '0s' }}></div>
+            <div className="glass-shape rounded-full w-16 h-16 left-[25%]" style={{ animationDuration: '15s', animationDelay: '2s' }}></div>
+            <div className="glass-shape rounded-3xl w-32 h-32 left-[70%]" style={{ animationDuration: '18s', animationDelay: '1s' }}></div>
+            <div className="glass-shape rounded-full w-20 h-20 left-[85%]" style={{ animationDuration: '14s', animationDelay: '4s' }}></div>
+            <div className="glass-shape rounded-xl w-12 h-12 left-[50%]" style={{ animationDuration: '10s', animationDelay: '6s' }}></div>
+
+            {/* ------------------------------------------- */}
+
+
+            {/* --- MAIN LOGIN CARD --- */}
+            {/* Added subtle bounce animation to the main card container */}
+            <div className="relative z-10 w-full max-w-[420px]" style={{ animation: 'bounce-subtle 6s ease-in-out infinite' }}>
+                
+                <div className="bg-white/80 backdrop-blur-xl rounded-[24px] shadow-[0_20px_60px_-15px_rgba(79,70,229,0.2)] p-8 sm:p-10 border border-white">
+                    
+                    {/* Header Elements */}
+                    <div className="text-center mb-8 relative">
+                        
+                        <h1 className="text-2xl font-black text-slate-800 tracking-tight mb-2">De Facto Institute</h1>
+                    
+                        <p className="text-slate-500 font-medium text-sm">Strictly for authorized administrators.</p>
                     </div>
-                    <h1 className="title">Admin Access</h1>
-                    <p className="subtitle">Secure login for administrators only.</p>
-                </div>
 
-                <form onSubmit={submit}>
-                    {error && (
-                        <div className="error-alert">
-                            <AlertCircle size={18} />
-                            <span>{error}</span>
-                        </div>
-                    )}
-
-                    <div className="input-group">
-                        <label className="input-label">Username or Email</label>
-                        <div style={{ position: 'relative' }}>
-                            <span className="input-icon">
-                                <Mail size={18} />
-                            </span>
-                            <input
-                                name="identifier"
-                                type="text"
-                                className="styled-input admin-input"
-                                placeholder="Enter admin username or email"
-                                value={form.identifier}
-                                onChange={handle}
-                                required
-                            />
-                        </div>
-                    </div>
-
-                    <div className="input-group">
-                        <label className="input-label">Password</label>
-                        <div style={{ position: 'relative' }}>
-                            <span className="input-icon">
-                                <KeyRound size={18} />
-                            </span>
-                            <input
-                                name="password"
-                                type={showPwd ? 'text' : 'password'}
-                                className="styled-input admin-input pwd-input"
-                                placeholder="********"
-                                value={form.password}
-                                onChange={handle}
-                                required
-                            />
-                            <span
-                                onClick={() => setShowPwd((value) => !value)}
-                                className="toggle-pwd"
-                            >
-                                {showPwd ? <EyeOff size={18} /> : <Eye size={18} />}
-                            </span>
-                        </div>
-                    </div>
-
-                    <button type="submit" disabled={loading} className="submit-btn admin-submit-btn">
-                        {loading ? (
-                            <>
-                                <Loader2 size={20} className="spin" />
-                                Authenticating...
-                            </>
-                        ) : (
-                            <>
-                                Secure Login Access
-                                <ArrowRight size={20} />
-                            </>
+                    {/* Form Elements */}
+                    <form onSubmit={submit}>
+                        
+                        {error && (
+                            <div className="mb-6 bg-red-50 border border-red-100 text-red-600 p-3 rounded-xl flex items-center gap-3 animate-in fade-in zoom-in duration-300">
+                                <AlertCircle size={18} className="shrink-0" />
+                                <span className="text-sm font-semibold">{error}</span>
+                            </div>
                         )}
-                    </button>
-                </form>
+
+                        {/* Username/Email */}
+                        <div className="space-y-1.5 mb-5">
+                            <label className="text-sm font-bold text-slate-700 ml-1">Admin Identity</label>
+                            <div className="relative group">
+                                <span className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-indigo-600 transition-colors">
+                                    <Mail size={18} />
+                                </span>
+                                <input
+                                    name="identifier"
+                                    type="text"
+                                    className="w-full pl-11 pr-4 py-3.5 bg-white border border-slate-200 rounded-xl text-slate-800 text-sm font-medium focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none shadow-sm"
+                                    placeholder="Username or email address"
+                                    value={form.identifier}
+                                    onChange={handle}
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        {/* Password */}
+                        <div className="space-y-1.5 mb-8">
+                            <label className="text-sm font-bold text-slate-700 ml-1">Security Key</label>
+                            <div className="relative group">
+                                <span className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-indigo-600 transition-colors">
+                                    <KeyRound size={18} />
+                                </span>
+                                <input
+                                    name="password"
+                                    type={showPwd ? 'text' : 'password'}
+                                    className="w-full pl-11 pr-12 py-3.5 bg-white border border-slate-200 rounded-xl text-slate-800 text-sm font-medium focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none shadow-sm"
+                                    placeholder="••••••••"
+                                    value={form.password}
+                                    onChange={handle}
+                                    required
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPwd((value) => !value)}
+                                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-[#0f172a] transition-colors"
+                                >
+                                    {showPwd ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Submit Button */}
+                        <button 
+                            type="submit" 
+                            disabled={loading} 
+                            className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-slate-900/20 hover:-translate-y-1 transition-all duration-300 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed group overflow-hidden relative"
+                        >
+                            {/* Fast Shimmer effect inside button */}
+                            <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover:animate-[shimmer_1s_infinite]"></div>
+                            
+                            {loading ? (
+                                <>
+                                    <Loader2 size={20} className="animate-spin relative z-10" />
+                                    <span className="relative z-10">Authenticating...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <span className="relative z-10 tracking-wide">Authorize Access</span>
+                                    <ArrowRight size={20} className="relative z-10 group-hover:translate-x-1.5 transition-transform duration-300" />
+                                </>
+                            )}
+                        </button>
+                        <style>{`@keyframes shimmer { 100% { transform: translateX(100%); } }`}</style>
+                    </form>
+
+                    {/* Footer note */}
+                    <div className="mt-6 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center justify-center gap-1.5">
+                        <Lock size={12} className="text-emerald-500" /> Secure 256-bit Connection
+                    </div>
+                </div>
             </div>
-
-            <style>{`
-                .login-page-wrapper {
-                    min-height: 100vh;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    background: #f8fafc;
-                    position: relative;
-                    overflow: hidden;
-                    font-family: 'Inter', sans-serif;
-                    padding: 20px;
-                }
-
-                .bg-decoration {
-                    position: absolute;
-                    width: 40%;
-                    height: 40%;
-                    border-radius: 50%;
-                    z-index: 0;
-                }
-
-                .top-left {
-                    top: -10%;
-                    left: -10%;
-                }
-
-                .bottom-right {
-                    bottom: -10%;
-                    right: -10%;
-                }
-
-                .login-card {
-                    width: 100%;
-                    max-width: 420px;
-                    background: #fff;
-                    border-radius: 0.375rem;
-                    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.02);
-                    padding: 40px;
-                    position: relative;
-                    z-index: 1;
-                    border: 1px solid rgba(226, 232, 240, 0.8);
-                    box-sizing: border-box;
-                }
-
-                .admin-login-card {
-                    border-top: 4px solid #8b5cf6;
-                }
-
-                .logo-container {
-                    width: 60px;
-                    height: 60px;
-                    border-radius: 0.375rem;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    margin: 0 auto 16px;
-                }
-
-                .title {
-                    font-size: 1.75rem;
-                    font-weight: 900;
-                    color: #0f172a;
-                    margin: 0;
-                    letter-spacing: -0.025em;
-                }
-
-                .subtitle {
-                    color: #64748b;
-                    margin-top: 8px;
-                    font-size: 0.875rem;
-                    font-weight: 500;
-                }
-
-                .error-alert {
-                    background: #fef2f2;
-                    border: 1px solid #fee2e2;
-                    color: #b91c1c;
-                    padding: 12px;
-                    border-radius: 0.375rem;
-                    margin-bottom: 20px;
-                    font-size: 0.85rem;
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    font-weight: 500;
-                }
-
-                .input-group {
-                    margin-bottom: 24px;
-                    text-align: left;
-                }
-
-                .input-label {
-                    display: block;
-                    font-size: 0.85rem;
-                    font-weight: 700;
-                    color: #334155;
-                    margin-bottom: 6px;
-                }
-
-                .styled-input {
-                    width: 100%;
-                    padding: 12px 16px 12px 44px;
-                    border-radius: 0.375rem;
-                    border: 1px solid #e2e8f0;
-                    background: #f8fafc;
-                    font-size: 0.95rem;
-                    outline: none;
-                    box-sizing: border-box;
-                    transition: all 0.2s;
-                }
-
-                .styled-input:focus {
-                    border-color: #8b5cf6;
-                    background: #fff;
-                    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
-                }
-
-                .pwd-input {
-                    padding-right: 44px;
-                }
-
-                .input-icon {
-                    position: absolute;
-                    left: 14px;
-                    top: 50%;
-                    transform: translateY(-50%);
-                    color: #94a3b8;
-                    display: flex;
-                }
-
-                .toggle-pwd {
-                    position: absolute;
-                    right: 14px;
-                    top: 50%;
-                    transform: translateY(-50%);
-                    color: #94a3b8;
-                    cursor: pointer;
-                    display: flex;
-                }
-
-                .submit-btn {
-                    width: 100%;
-                    padding: 14px;
-                    border-radius: 0.375rem;
-                    color: #fff;
-                    font-size: 1rem;
-                    font-weight: 700;
-                    border: none;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 8px;
-                    transition: transform 0.2s, box-shadow 0.2s;
-                }
-
-                .admin-submit-btn {
-                    background: linear-gradient(135deg, #4c1d95 0%, #8b5cf6 100%);
-                    box-shadow: 0 10px 15px -3px rgba(139, 92, 246, 0.2);
-                }
-
-                .admin-submit-btn:hover:not(:disabled) {
-                    box-shadow: 0 10px 15px -3px rgba(139, 92, 246, 0.4);
-                }
-
-                .submit-btn:active {
-                    transform: scale(0.98);
-                }
-
-                .submit-btn:disabled {
-                    opacity: 0.7;
-                    cursor: not-allowed;
-                }
-
-                .spin {
-                    animation: spin 1s linear infinite;
-                }
-
-                @keyframes spin {
-                    from { transform: rotate(0deg); }
-                    to { transform: rotate(360deg); }
-                }
-
-                @media (max-width: 480px) {
-                    .login-card {
-                        padding: 32px 24px;
-                        border-radius: 0.375rem;
-                    }
-
-                    .title {
-                        font-size: 1.5rem;
-                    }
-
-                    .bg-decoration {
-                        display: none;
-                    }
-                }
-            `}</style>
         </div>
     );
 };

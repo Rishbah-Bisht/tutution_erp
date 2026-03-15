@@ -62,3 +62,16 @@ exports.sendNotifications = async (req, res, next) => {
         next(error);
     }
 };
+
+exports.cleanupHistory = async (req, res, next) => {
+    try {
+        const result = await notificationService.cleanupOldNotifications();
+        res.json({
+            success: true,
+            message: `Successfully deleted ${result.deletedCount} old notification records.`,
+            ...result
+        });
+    } catch (error) {
+        next(error);
+    }
+};

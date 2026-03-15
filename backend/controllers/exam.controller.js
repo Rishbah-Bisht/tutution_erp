@@ -36,6 +36,20 @@ exports.createExam = async (req, res) => {
         const students = await Student.find({ batchId, status: 'active' }).select('name email').lean();
 
         students.forEach(student => {
+            // Trigger Automatic Notification (Push/Email)
+            triggerAutomaticNotification({
+                eventType: 'testAnnouncement',
+                studentId: student._id,
+                message: `New Test Scheduled: ${name} (${subject}) on ${date ? new Date(date).toLocaleDateString('en-IN') : 'TBD'}`,
+                data: {
+                    examName: name,
+                    subject,
+                    date: date ? new Date(date).toLocaleDateString('en-IN') : 'TBD',
+                    totalMarks,
+                    passingMarks
+                }
+            });
+
             if (student.email) {
                 logNotificationEvent({
                     recipientEmail: student.email,

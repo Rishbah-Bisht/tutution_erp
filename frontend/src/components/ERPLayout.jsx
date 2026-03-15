@@ -55,7 +55,7 @@ const NAV_ITEMS = [
         section: 'Admin',
         items: [
             { to: '/profile', icon: UserCircle, label: 'Institute Profile' },
-            { to: '/templates', icon: Mail, label: 'Email Templates' },
+            // { to: '/templates', icon: Mail, label: 'Email Templates' },
             { to: '/notifications', icon: Bell, label: 'Notifications' },
             { to: '/settings', icon: Settings, label: 'Settings' }
         ]
@@ -111,7 +111,7 @@ const ERPLayout = ({ children, title }) => {
                     {!mini && (
                         <div className="sb-brand-copy">
                             <div className="sb-name">{instituteName}</div>
-                            
+
                         </div>
                     )}
                 </div>
@@ -170,12 +170,12 @@ const ERPLayout = ({ children, title }) => {
                         </div>
                     </div>
 
-                    
+
 
                     <div className="tb-right">
-                        
 
-                       
+
+
 
                         <div className="shell-profile" title={adminName}>
                             <div className="tb-avatar">{profileInitial}</div>
@@ -183,7 +183,7 @@ const ERPLayout = ({ children, title }) => {
                                 <span className="shell-profile-name">{adminName}</span>
                                 <span className="shell-profile-role">Admin</span>
                             </div>
-                            
+
                         </div>
                     </div>
                 </header>

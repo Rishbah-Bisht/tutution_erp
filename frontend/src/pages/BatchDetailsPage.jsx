@@ -399,30 +399,59 @@ const BatchDetailsPage = () => {
 
             {/* Timetable Preview Modal */}
             {showPreview && (
-                <div className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
-                        <div className="p-4 border-b flex items-center justify-between bg-slate-50">
-                            <div>
-                                <h3 className="font-black text-slate-800 flex items-center gap-2">
-                                    <Calendar size={20} className="text-indigo-600" /> TIMETABLE PREVIEW
-                                </h3>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Review your schedule before downloading</p>
+                <div className="modal-overlay" style={{
+                    position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.7)',
+                    backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex',
+                    alignItems: 'center', justifyContent: 'center', padding: '20px'
+                }} onClick={(e) => e.target === e.currentTarget && setShowPreview(false)}>
+                    <div className="modal" style={{
+                        width: '100%', maxWidth: '1200px', maxHeight: '100vh',
+                        background: '#f8fafc', borderRadius: '12px', overflow: 'hidden',
+                        display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+                        position: 'relative'
+                    }}>
+                        {/* Header matching StudentFormModal */}
+                        <header style={{
+                            width: '100%', padding: '24px 32px', background: '#0f172a',
+                            position: 'relative', color: '#fff', display: 'flex',
+                            justifyContent: 'space-between', alignItems: 'center', flexShrink: 0
+                        }}>
+                            <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 16 }}>
+                                <div style={{
+                                    width: 52, height: 52, borderRadius: '8px',
+                                    background: 'rgba(255,255,255,0.1)', overflow: 'hidden',
+                                    border: '1px solid rgba(255,255,255,0.2)', display: 'flex',
+                                    alignItems: 'center', justifyContent: 'center'
+                                }} className="hide-mobile">
+                                    <Calendar size={24} color="#fff" />
+                                </div>
+                                <div>
+                                    <h2 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>
+                                        Timetable Preview
+                                    </h2>
+                                    <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>
+                                        Review schedule for {batch.name}
+                                    </div>
+                                </div>
                             </div>
                             <div className="flex items-center gap-2">
                                 <button
                                     onClick={() => generateTimetablePDF(false)}
-                                    className="px-4 py-2 bg-indigo-600 text-white rounded-md text-xs font-bold hover:bg-indigo-700 flex items-center gap-2 transition-all shadow-md active:scale-95"
+                                    className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-white text-xs font-bold flex items-center gap-2 transition-all"
                                 >
                                     <Download size={14} /> DOWNLOAD PDF
                                 </button>
-                                <button
-                                    onClick={() => { setShowPreview(false); setPdfUrl(null); }}
-                                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full transition-all"
-                                >
-                                    <X size={20} />
+                                <button type="button" onClick={() => setShowPreview(false)} style={{
+                                    background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)',
+                                    borderRadius: '8px', color: '#fff', padding: '8px 16px', cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.75rem', fontWeight: 700
+                                }}>
+                                    <X size={16} /> <span className="hide-mobile">CLOSE</span>
                                 </button>
                             </div>
-                        </div>
+                        </header>
+
+                        {/* PDF View Area */}
                         <div className="flex-1 bg-slate-100 p-8 overflow-hidden">
                             <iframe
                                 src={pdfUrl}

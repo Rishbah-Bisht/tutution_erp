@@ -174,7 +174,7 @@ exports.updateSettings = async (req, res) => {
         const admin = await Admin.findById(req.admin.id).select('-password');
         if (!admin) return res.status(404).json({ message: 'Admin not found' });
 
-        const { fcmServerKey, gmailEmail, gmailAppPassword, notificationsEnabled, emailEvents, receiptSettings } = req.body;
+        const { fcmServerKey, gmailEmail, gmailAppPassword, notificationsEnabled, emailEvents, pushEvents, receiptSettings } = req.body;
 
         if (fcmServerKey !== undefined) admin.fcmServerKey = fcmServerKey;
         if (gmailEmail !== undefined) admin.gmailEmail = gmailEmail;
@@ -182,6 +182,9 @@ exports.updateSettings = async (req, res) => {
         if (notificationsEnabled !== undefined) admin.notificationsEnabled = notificationsEnabled;
         if (emailEvents !== undefined) {
             admin.emailEvents = { ...admin.emailEvents, ...emailEvents };
+        }
+        if (pushEvents !== undefined) {
+            admin.pushEvents = { ...admin.pushEvents, ...pushEvents };
         }
         if (receiptSettings !== undefined) {
             admin.receiptSettings = { ...admin.receiptSettings, ...receiptSettings };

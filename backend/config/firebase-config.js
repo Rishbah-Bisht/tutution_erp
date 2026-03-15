@@ -40,8 +40,16 @@ const messaging = firebaseApp ? firebaseApp.messaging() : {
         console.log('[FCM-Simulator] SendBatch Payload count:', payloads.length);
         return Promise.resolve({ successCount: payloads.length, failureCount: 0, responses: [] });
     },
+    sendEachForMulticast: (payload) => {
+        console.log('[FCM-Simulator] SendMulticast Tokens count:', payload.tokens.length);
+        return Promise.resolve({ successCount: payload.tokens.length, failureCount: 0, responses: payload.tokens.map(() => ({ success: true })) });
+    },
     subscribeToTopic: (tokens, topic) => {
         console.log(`[FCM-Simulator] Subscribing ${tokens.length} tokens to topic: ${topic}`);
+        return Promise.resolve({ successCount: tokens.length, failureCount: 0, errors: [] });
+    },
+    unsubscribeFromTopic: (tokens, topic) => {
+        console.log(`[FCM-Simulator] Unsubscribing ${tokens.length} tokens from topic: ${topic}`);
         return Promise.resolve({ successCount: tokens.length, failureCount: 0, errors: [] });
     }
 };

@@ -20,9 +20,17 @@ const sendPushNotification = async (payload) => {
         body: message,
     };
 
+    // FCM Data must only contain string values
+    const stringifiedData = {};
+    if (data) {
+        Object.keys(data).forEach(key => {
+            stringifiedData[key] = String(data[key]);
+        });
+    }
+
     const commonData = {
-        type: type || 'general',
-        ...data,
+        type: String(type || 'general'),
+        ...stringifiedData,
         click_action: 'FLUTTER_NOTIFICATION_CLICK', // Standard for many RN libs
     };
 

@@ -4,6 +4,7 @@ const Admin = require('../models/Admin');
 const NotificationTemplate = require('../models/NotificationTemplate');
 const { sendPushNotification } = require('./pushNotificationService');
 const { sendEmail } = require('./emailService');
+const { generateFeeReceiptPdf } = require('./pdfService');
 
 const createHttpError = (message, status = 400) => {
     const error = new Error(message);
@@ -238,8 +239,17 @@ const getRecipients = async ({ search = '', page = 1, limit = 25, status = 'acti
     };
 };
 
-const getNotificationHistory = async ({ page = 1, limit = 20, status = '', deliveryType = '', studentId = '' }) => {
+const getNotificationHistory = async ({ page = 1, limit = 5, status = '', deliveryType = '', studentId = '' }) => {
+    // Automatically cleanup data older than 3 days
+    await cleanupOldNotifications(3);
+
     const query = {};
+    
+    // Only fetch records from the last 3 days
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+    query.createdAt = { $gte: threeDaysAgo };
+
     if (status) query.status = status;
     if (deliveryType) query.deliveryType = deliveryType;
     if (studentId) query.studentId = studentId;
@@ -293,22 +303,31 @@ const triggerAutomaticNotification = async ({ eventType, studentId, teacherId, m
             return;
         }
 
-        // Check if this specific event type is enabled in emailEvents (using it as a proxy for both if not separated)
-        if (admin.emailEvents && admin.emailEvents[eventType] === false) {
-            console.log(`[AutoNotification] Skipped: Event type ${eventType} is disabled in settings`);
+        // Check if specific event types are enabled in admin settings
+        // If the object or key is missing, we default to TRUE for standard notifications
+        const isEmailEnabled = admin.emailEvents?.[eventType] !== false;
+        let isPushEnabled = admin.pushEvents?.[eventType] !== false;
+
+        // Force disable push for fee submission as per user request
+        if (eventType === 'feePayment') {
+            isPushEnabled = false;
+        }
+
+        if (!isEmailEnabled && !isPushEnabled) {
+            console.log(`[AutoNotification] Skipped: Both Email and Push for ${eventType} are disabled (or Push forced OFF)`);
             return;
         }
 
         // Fetch custom template
         const template = await NotificationTemplate.findOne({ eventType, isActive: true }).lean();
+        console.log(`[NotificationService] Template for ${eventType}: ${template ? 'Found' : 'Not Found'}`);
 
-        let subject = 'Institute Notification';
-        let body = fallbackMessage;
+        let subjectEmail = 'Institute Notification';
+        let bodyEmail = fallbackMessage;
+        let subjectPush = 'ERP Notification';
+        let bodyPush = fallbackMessage;
 
         if (template) {
-            subject = template.subject;
-            body = template.body;
-
             // Prepare replacement tokens
             const tokens = {
                 studentName: recipientType === 'student' ? recipient.name : '',
@@ -319,35 +338,75 @@ const triggerAutomaticNotification = async ({ eventType, studentId, teacherId, m
                 ...data
             };
 
-            // Replace placeholders in subject and body
-            Object.keys(tokens).forEach(key => {
-                const regex = new RegExp(`{{${key}}}`, 'g');
-                const val = tokens[key] !== undefined && tokens[key] !== null ? String(tokens[key]) : '';
-                subject = subject.replace(regex, val);
-                body = body.replace(regex, val);
-            });
+            const processText = (text, pairTokens) => {
+                let result = text || '';
+                Object.keys(pairTokens).forEach(key => {
+                    const regex = new RegExp(`{{${key}}}`, 'g');
+                    const val = pairTokens[key] !== undefined && pairTokens[key] !== null ? String(pairTokens[key]) : '';
+                    result = result.replace(regex, val);
+                });
+                return result;
+            };
+
+            subjectEmail = processText(template.subject, tokens);
+            bodyEmail = processText(template.body, tokens);
+            
+            // Use push-specific templates if available, otherwise fallback to main ones
+            subjectPush = processText(template.subjectPush || template.subject, tokens);
+            bodyPush = processText(template.bodyPush || template.body, tokens);
         }
 
         const methods = [];
-        if (recipient.email) methods.push('email');
-        if (recipient.deviceTokens && recipient.deviceTokens.length > 0) methods.push('push');
+        if (recipient.email && isEmailEnabled) methods.push('email');
+        if (recipient.deviceTokens && recipient.deviceTokens.length > 0 && isPushEnabled) methods.push('push');
+        
+        console.log(`[NotificationService] Methods: [${methods.join(', ')}]`);
 
         if (methods.length === 0) {
-            console.log(`[AutoNotification] Skipped: No delivery methods available for ${recipient.name}`);
+            console.log(`[AutoNotification] Skipped: No allowed delivery methods available for ${recipient.name} (Email: ${isEmailEnabled}, Push: ${isPushEnabled})`);
             return;
         }
 
         let emailResult = null;
         let pushResult = null;
+        let attachments = [];
+
+        // Generate PDF Receipt if it's a fee payment and email is being sent
+        if (eventType === 'feePayment' && methods.includes('email') && data.feeId) {
+            console.log(`[NotificationService] Attempting PDF Generation for Fee: ${data.feeId}`);
+            try {
+                const Fee = require('../models/Fee');
+                const feeRecord = await Fee.findById(data.feeId).lean();
+                if (feeRecord) {
+                    const payment = feeRecord.paymentHistory.find(p => p.paymentId === data.paymentId || p.receiptNo === data.receiptNo);
+                    if (payment) {
+                        const pdfBuffer = await generateFeeReceiptPdf({
+                            student: recipient,
+                            payment,
+                            fee: feeRecord,
+                            admin
+                        });
+                        attachments.push({
+                            filename: `Receipt_${payment.receiptNo}.pdf`,
+                            content: pdfBuffer
+                        });
+                        console.log(`[AutoNotification] Generated PDF Receipt for ${payment.receiptNo}. Buffer size: ${pdfBuffer.length}`);
+                    }
+                }
+            } catch (pdfErr) {
+                console.error('[AutoNotification] Failed to generate PDF receipt:', pdfErr.message);
+            }
+        }
 
         // Dispatch Email
         if (methods.includes('email')) {
             emailResult = await sendEmail({
                 student: recipientType === 'student' ? recipient : null,
                 teacher: recipientType === 'teacher' ? recipient : null,
-                message: body,
+                message: bodyEmail,
                 admin,
-                subjectOverride: subject
+                subjectOverride: subjectEmail,
+                attachments
             });
         }
 
@@ -355,8 +414,8 @@ const triggerAutomaticNotification = async ({ eventType, studentId, teacherId, m
         if (methods.includes('push')) {
             pushResult = await sendPushNotification({
                 student: recipient,
-                message: body,
-                title: subject,
+                message: bodyPush,
+                title: subjectPush,
                 type: eventType,
                 data: data
             });
@@ -370,8 +429,8 @@ const triggerAutomaticNotification = async ({ eventType, studentId, teacherId, m
         const overallStatus = deriveOverallStatus(channelResults);
 
         await Notification.create({
-            title: subject,
-            message: body,
+            title: subjectPush, // Using push title for history display
+            message: bodyPush,   // Using push body for history display
             type: eventType,
             studentId: recipientType === 'student' ? recipient._id : null,
             teacherId: recipientType === 'teacher' ? recipient._id : null,
@@ -395,9 +454,25 @@ const triggerAutomaticNotification = async ({ eventType, studentId, teacherId, m
     }
 };
 
+const cleanupOldNotifications = async (days = 7) => {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+
+    console.log(`[NotificationService] Cleaning up notifications older than ${cutoffDate.toISOString()} (${days} days)`);
+    
+    // We only delete notifications that are NOT scheduled in the future (though cutoffDate handles that)
+    const result = await Notification.deleteMany({
+        createdAt: { $lt: cutoffDate },
+        status: { $ne: 'scheduled' } 
+    });
+
+    return { deletedCount: result.deletedCount, cutoffDate };
+};
+
 module.exports = {
     sendNotificationBatch,
     getRecipients,
     getNotificationHistory,
-    triggerAutomaticNotification
+    triggerAutomaticNotification,
+    cleanupOldNotifications
 };

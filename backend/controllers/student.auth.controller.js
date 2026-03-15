@@ -3,7 +3,7 @@ const ExamResult = require('../models/ExamResult');
 const Attendance = require('../models/Attendance');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { logNotificationEvent } = require('../services/activityLogService');
+const { triggerAutomaticNotification } = require('../services/notificationService');
 const { JWT_SECRET } = require('../middleware/auth.middleware');
 
 const createStudentToken = (studentId) => jwt.sign({ id: studentId, role: 'student' }, JWT_SECRET, { expiresIn: '2h' });
@@ -107,16 +107,14 @@ exports.signup = async (req, res) => {
 
         await student.save();
 
-        logNotificationEvent({
-            recipientEmail: student.email,
-            recipientName: student.name,
-            subject: 'Student Portal Activated',
-            type: 'student_registration',
+        await triggerAutomaticNotification({
+            studentId: student._id,
+            eventType: 'studentRegistration',
+            message: `Hello ${student.name}, your portal account has been activated successfully. Roll No: ${student.rollNo}`,
             data: {
-                rollNo: student.rollNo,
-                signedUpAt: student.portalAccess.signedUpAt
+                rollNo: student.rollNo
             }
-        }).catch((error) => console.error('[student.signup.log]', error));
+        });
 
         res.status(201).json({
             message: 'Signup successful',

@@ -1,15 +1,17 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Bell, Loader2, Mail, Search, Send, Smartphone, Users, X } from "lucide-react";
+import { AlertCircle, Bell, Loader2, Mail, Search, Send, Smartphone, Users, X } from "lucide-react";
 import ERPLayout from "../components/ERPLayout";
 import AlertMessage from "../components/common/AlertMessage";
 import {
   fetchNotificationHistory,
   fetchNotificationRecipients,
-  sendAdminNotifications
+  sendAdminNotifications,
+  cleanupNotificationHistory
 } from "../api/notificationApi";
 import { getAdminProfile } from "../api/adminApi";
 import { getAllBatches } from "../api/batchApi";
 import { Filter, Trash2, CheckSquare, RefreshCcw } from "lucide-react";
+import ActionModal from "../components/common/ActionModal";
 
 const STATUS_STYLES = {
   sent: "bg-green-50 text-green-700 border border-green-200",
@@ -58,10 +60,24 @@ const NotificationsPage = () => {
   const [filterBatch, setFilterBatch] = useState("");
   const [filterPendingFees, setFilterPendingFees] = useState(false);
   const [filterPushReady, setFilterPushReady] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [hasMoreHistory, setHasMoreHistory] = useState(false);
 
   const [loadingRecipients, setLoadingRecipients] = useState(true);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [sending, setSending] = useState(false);
+  const [isCleaning, setIsCleaning] = useState(false);
+
+  // Action Modal State
+  const [actionState, setActionState] = useState({
+    isOpen: false,
+    type: 'danger',
+    title: '',
+    desc: '',
+    onConfirm: null,
+    loading: false,
+    error: ''
+  });
 
   const selectedIds = useMemo(
     () => selectedRecipients.map((s) => s._id),
@@ -135,16 +151,29 @@ const NotificationsPage = () => {
     }
   };
 
-  const loadHistory = async () => {
-    setLoadingHistory(true);
+  const loadHistory = async (page = 1, append = false) => {
+    if (!append) setLoadingHistory(true);
     try {
-      const { data } = await fetchNotificationHistory({ limit: 25 });
-      setHistory(data.notifications || []);
+      const { data } = await fetchNotificationHistory({ page, limit: 5 });
+      const newNotifications = data.notifications || [];
+      
+      if (append) {
+        setHistory(prev => [...prev, ...newNotifications]);
+      } else {
+        setHistory(newNotifications);
+      }
+      
+      setHasMoreHistory(newNotifications.length === 5);
+      setHistoryPage(page);
     } catch {
       setAlert({ type: "error", text: "Failed to load notification history." });
     } finally {
-      setLoadingHistory(false);
+      if (!append) setLoadingHistory(false);
     }
+  };
+
+  const handleLoadMoreHistory = () => {
+    loadHistory(historyPage + 1, true);
   };
 
   const handleManualRefresh = async () => {
@@ -241,6 +270,37 @@ const NotificationsPage = () => {
       });
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleCleanupHistory = async () => {
+    setActionState({
+      isOpen: true,
+      type: 'danger',
+      title: 'Purge Notification History',
+      desc: 'This will delete ALL notification logs older than 3 days. This action is permanent. Enter admin password to authorize cleanup.',
+      onConfirm: (pwd) => confirmCleanup(pwd),
+      loading: false,
+      error: ''
+    });
+  };
+
+  const confirmCleanup = async (pwd) => {
+    setActionState(prev => ({ ...prev, loading: true, error: '' }));
+    try {
+      const { data } = await cleanupNotificationHistory(pwd);
+      setAlert({
+        type: "success",
+        text: data.message || "Old history cleaned successfully."
+      });
+      setActionState(prev => ({ ...prev, isOpen: false }));
+      loadHistory();
+    } catch (err) {
+      setActionState(prev => ({ 
+        ...prev, 
+        loading: false, 
+        error: err.response?.data?.message || 'Authorization failed' 
+      }));
     }
   };
 
@@ -665,9 +725,13 @@ const NotificationsPage = () => {
 
           <div className="flex items-center justify-between mb-5">
 
-            <h2 className="text-lg font-semibold text-gray-900">
-              Notification History
-            </h2>
+            <div className="flex flex-col gap-1">
+              <h2 className="text-lg font-semibold text-gray-900">Notification History</h2>
+              <p className="text-xs text-amber-600 flex items-center gap-1 font-medium">
+                <AlertCircle size={12} />
+                Records are automatically deleted after 3 days.
+              </p>
+            </div>
 
             <div className="flex items-center gap-3">
               <span className="text-sm text-gray-500">
@@ -682,129 +746,152 @@ const NotificationsPage = () => {
                 <RefreshCcw size={14} className={loadingHistory ? "animate-spin" : ""} />
                 Refresh
               </button>
+              <button
+                type="button"
+                onClick={handleCleanupHistory}
+                disabled={isCleaning || loadingHistory}
+                className="inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold border border-red-200 rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-60"
+              >
+                {isCleaning ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                Clear Old History
+              </button>
             </div>
 
           </div>
 
-          <div className="overflow-x-auto">
+         <div className="w-full overflow-x-auto rounded-lg shadow-sm">
+  {/* Added min-w-[900px] to force the table to stay wide enough to scroll */}
+  <table className="w-full min-w-[900px] text-sm">
+    <thead className="bg-gray-50 border-b">
+      {/* Added whitespace-nowrap to keep headers on a single line */}
+      <tr className="text-gray-600 text-left whitespace-nowrap">
+        <th className="px-4 py-3 font-semibold">Message</th>
+        <th className="px-4 py-3 font-semibold">Delivery</th>
+        <th className="px-4 py-3 font-semibold">Target</th>
+        <th className="px-4 py-3 font-semibold">Time</th>
+        <th className="px-4 py-3 font-semibold text-center">Status</th>
+        <th className="px-4 py-3 font-semibold">Reason</th>
+      </tr>
+    </thead>
 
-            <table className="w-full text-sm">
+    <tbody>
+      {loadingHistory ? (
+        <tr>
+          <td colSpan="6" className="text-center py-10 text-gray-500">
+            <div className="flex items-center justify-center gap-2">
+              <Loader2 size={18} className="animate-spin" />
+              Loading notification history...
+            </div>
+          </td>
+        </tr>
+      ) : history.length === 0 ? (
+        <tr>
+          <td colSpan="6" className="text-center py-10 text-gray-400">
+            No notifications found
+          </td>
+        </tr>
+      ) : (
+        history.map((entry) => (
+          <tr
+            key={entry._id}
+            className="border-b hover:bg-gray-50 transition"
+          >
+            {/* Message */}
+            <td className="py-3 px-4 font-medium text-gray-900 max-w-xs truncate">
+              {entry.message}
+            </td>
 
-              <thead className="bg-gray-50 border-b">
+            {/* Delivery */}
+            <td className="px-4 whitespace-nowrap">
+              <span className="px-2 py-1 rounded-md text-xs font-semibold bg-indigo-50 text-indigo-700">
+                {formatDeliveryType(entry.deliveryType)}
+              </span>
+            </td>
 
-                <tr className="text-gray-600 text-left">
+            {/* Student */}
+            <td className="px-4 whitespace-nowrap">
+              <div className="flex flex-col">
+                <span className="font-semibold text-gray-900">
+                  {entry.studentId?.name || "Deleted"}
+                </span>
+                <span className="text-xs text-gray-500">
+                  {entry.studentId?.rollNo}
+                </span>
+              </div>
+            </td>
 
-                  <th className="py-3 px-4 font-semibold">Title & Type</th>
-                  <th className="px-4 font-semibold">Message</th>
-                  <th className="px-4 font-semibold">Delivery</th>
-                  <th className="px-4 font-semibold">Target</th>
-                  <th className="px-4 font-semibold">Time</th>
-                  <th className="px-4 font-semibold">Status</th>
+            {/* Time */}
+            <td className="px-4 text-gray-600 whitespace-nowrap">
+              {new Date(entry.createdAt).toLocaleString("en-IN")}
+            </td>
 
-                </tr>
+            {/* Status */}
+            <td className="px-4 text-center whitespace-nowrap">
+              <span
+                className={`px-2 py-1 rounded-md text-xs font-semibold
+        ${STATUS_STYLES[entry.status] || STATUS_STYLES.pending}`}
+              >
+                {entry.status}
+              </span>
+            </td>
 
-              </thead>
+            {/* Reason */}
+            <td className="px-4 py-3 text-xs text-red-600 font-medium max-w-xs">
+              {entry.status === 'failed' || entry.status === 'partial' ? (
+                <div className="flex flex-col gap-0.5">
+                  {entry.pushResult?.error && (
+                    <span className="flex items-center gap-1">
+                      <Smartphone size={10} className="text-gray-400 shrink-0" />
+                      <span className="truncate">{entry.pushResult.error}</span>
+                    </span>
+                  )}
+                  {entry.emailResult?.error && (
+                    <span className="flex items-center gap-1">
+                      <Mail size={10} className="text-gray-400 shrink-0" />
+                      <span className="truncate">{entry.emailResult.error}</span>
+                    </span>
+                  )}
+                  {!entry.pushResult?.error && !entry.emailResult?.error && (
+                    <span className="text-gray-400 italic">No specific error recorded</span>
+                  )}
+                </div>
+              ) : (
+                <span className="text-gray-300">—</span>
+              )}
+            </td>
+          </tr>
+        ))
+      )}
+    </tbody>
+  </table>
+</div>
 
-              <tbody>
-
-                {loadingHistory ? (
-
-                  <tr>
-                    <td colSpan="5" className="text-center py-10 text-gray-500">
-
-                      <div className="flex items-center justify-center gap-2">
-                        <Loader2 size={18} className="animate-spin" />
-                        Loading notification history...
-                      </div>
-
-                    </td>
-                  </tr>
-
-                ) : history.length === 0 ? (
-
-                  <tr>
-                    <td colSpan="5" className="text-center py-10 text-gray-400">
-                      No notifications found
-                    </td>
-                  </tr>
-
-                ) : (
-
-                  history.map((entry) => (
-
-                    <tr
-                      key={entry._id}
-                      className="border-b hover:bg-gray-50 transition"
-                    >
-
-                      {/* Message */}
-
-                      <td className="py-3 px-4 font-medium text-gray-900 max-w-xs truncate">
-                        {entry.message}
-                      </td>
-
-                      {/* Delivery */}
-
-                      <td className="px-4">
-
-                        <span className="px-2 py-1 rounded-md text-xs font-semibold bg-indigo-50 text-indigo-700">
-                          {formatDeliveryType(entry.deliveryType)}
-                        </span>
-
-                      </td>
-
-                      {/* Student */}
-
-                      <td className="px-4">
-
-                        <div className="flex flex-col">
-
-                          <span className="font-semibold text-gray-900">
-                            {entry.studentId?.name || "Deleted"}
-                          </span>
-
-                          <span className="text-xs text-gray-500">
-                            {entry.studentId?.rollNo}
-                          </span>
-
-                        </div>
-
-                      </td>
-
-                      {/* Time */}
-
-                      <td className="px-4 text-gray-600">
-                        {new Date(entry.createdAt).toLocaleString("en-IN")}
-                      </td>
-
-                      {/* Status */}
-
-                      <td className="px-4">
-
-                        <span
-                          className={`px-2 py-1 rounded-md text-xs font-semibold
-                  ${STATUS_STYLES[entry.status] || STATUS_STYLES.pending}`}
-                        >
-                          {entry.status}
-                        </span>
-
-                      </td>
-
-                    </tr>
-
-                  ))
-
-                )}
-
-              </tbody>
-
-            </table>
-
-          </div>
+{hasMoreHistory && (
+  <div className="mt-4 flex justify-center pb-2">
+    <button
+      onClick={handleLoadMoreHistory}
+      disabled={loadingHistory}
+      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-erp-primary hover:bg-indigo-50 rounded-lg transition-colors border border-indigo-100 disabled:opacity-50"
+    >
+      {loadingHistory ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcw size={16} />}
+      Show More History
+    </button>
+  </div>
+)}
 
         </div>
 
       </div>
+      <ActionModal
+        isOpen={actionState.isOpen}
+        onClose={() => setActionState(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={actionState.onConfirm}
+        title={actionState.title}
+        description={actionState.desc}
+        actionType={actionState.type}
+        loading={actionState.loading}
+        error={actionState.error}
+      />
     </ERPLayout>
   );
 };

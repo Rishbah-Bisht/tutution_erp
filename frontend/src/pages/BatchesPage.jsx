@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import {
     Plus, RefreshCw, Search, Pencil, Trash2, X, Lock,
     Loader2, AlertCircle, CheckCircle2, BookOpen, Users,
@@ -9,7 +8,6 @@ import {
 import ERPLayout from '../components/ERPLayout';
 import ToastContainer, { useToast } from '../components/Toast';
 import ActionModal from '../components/common/ActionModal';
-import AlertMessage from '../components/common/AlertMessage';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { SkeletonTable } from '../components/common/SkeletonLoaders';
@@ -991,4 +989,3 @@ const BatchesPage = () => {
 };
 
 export default BatchesPage;
-

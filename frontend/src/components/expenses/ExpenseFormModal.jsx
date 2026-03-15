@@ -96,8 +96,23 @@ const ExpenseFormModal = ({ isOpen, onClose, onSuccess, expense = null }) => {
     };
 
     return (
-        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-            <div className="modal" style={{ maxWidth: 600, width: '95vw', maxHeight: '90vh', borderRadius: '4px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div 
+            className="modal-overlay" 
+            style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(15, 23, 42, 0.7)',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+                zIndex: 1000,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '20px'
+            }}
+            onClick={(e) => e.target === e.currentTarget && onClose()}
+        >
+            <div className="modal" style={{ maxWidth: 600, width: '95vw', maxHeight: '90vh', borderRadius: '12px', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
 
                 {/* HEADER */}
                 <div style={{

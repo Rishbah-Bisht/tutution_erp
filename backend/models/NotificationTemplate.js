@@ -18,7 +18,9 @@ const notificationTemplateSchema = new mongoose.Schema({
             'examResult',
             'teacherRegistration',
             'salaryPaid',
-            'teacherBatchAssignment'
+            'teacherBatchAssignment',
+            'testAnnouncement',
+            'surchargeAdded'
         ]
     },
     subject: {
@@ -29,6 +31,15 @@ const notificationTemplateSchema = new mongoose.Schema({
     body: {
         type: String,
         required: true
+    },
+    subjectPush: {
+        type: String,
+        trim: true,
+        default: ''
+    },
+    bodyPush: {
+        type: String,
+        default: ''
     },
     placeholders: {
         type: [String],

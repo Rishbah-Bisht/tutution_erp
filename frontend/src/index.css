@@ -357,6 +357,40 @@ a {
     box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
 }
 
+/* --- TOPBAR STYLES --- */
+.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    height: var(--topbar-h, 72px);
+    /* Fallback 72px agar variable na ho */
+    padding: 0 24px;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-shrink: 0;
+
+    background: rgba(255, 255, 255, 0.85);
+    /* Semi-transparent white */
+    border-bottom: 1px solid var(--erp-border, #e2e8f0);
+
+    /* Soft premium shadow & Glassmorphism */
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.01);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Dark mode support (Optional - agar aap dark mode use karte hain) */
+.dark .topbar {
+    background: rgba(15, 23, 42, 0.85);
+    /* Tailwind slate-900 */
+    border-bottom: 1px solid #1e293b;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+}
 
 /* Forgot + Remember row */
 .lf-extras {
@@ -678,9 +712,10 @@ a {
 .sb-item-label {
     font-size: 0.875rem;
     font-weight: 500;
-    
+
 }
-.sing-out{
+
+.sing-out {
     color: red;
 }
 
@@ -688,7 +723,7 @@ a {
 .sb-footer {
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     padding: 0px 8px;
-    
+
 }
 
 

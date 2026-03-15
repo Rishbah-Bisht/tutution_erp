@@ -88,15 +88,28 @@ const adminSchema = new mongoose.Schema({
         default: true
     },
     emailEvents: {
-        studentRegistration: { type: Boolean, default: false },
-        feeGenerated: { type: Boolean, default: false },
-        feePayment: { type: Boolean, default: false },
-        batchAssignment: { type: Boolean, default: false },
-        feeOverdue: { type: Boolean, default: false },
-        examResult: { type: Boolean, default: false },
-        teacherRegistration: { type: Boolean, default: false },
-        salaryPaid: { type: Boolean, default: false },
-        teacherBatchAssignment: { type: Boolean, default: false }
+        studentRegistration: { type: Boolean, default: true },
+        feeGenerated: { type: Boolean, default: true },
+        feePayment: { type: Boolean, default: true },
+        batchAssignment: { type: Boolean, default: true },
+        feeOverdue: { type: Boolean, default: true },
+        examResult: { type: Boolean, default: true },
+        teacherRegistration: { type: Boolean, default: true },
+        salaryPaid: { type: Boolean, default: true },
+        teacherBatchAssignment: { type: Boolean, default: true },
+        testAnnouncement: { type: Boolean, default: true }
+    },
+    pushEvents: {
+        studentRegistration: { type: Boolean, default: true },
+        feeGenerated: { type: Boolean, default: true },
+        feePayment: { type: Boolean, default: true },
+        batchAssignment: { type: Boolean, default: true },
+        feeOverdue: { type: Boolean, default: true },
+        examResult: { type: Boolean, default: true },
+        teacherRegistration: { type: Boolean, default: true },
+        salaryPaid: { type: Boolean, default: true },
+        teacherBatchAssignment: { type: Boolean, default: true },
+        testAnnouncement: { type: Boolean, default: true }
     },
     receiptSettings: {
         showCoachingName: { type: Boolean, default: true },
