@@ -266,56 +266,116 @@ const StudentDashboard = () => {
                                             )}
                                         </div>
                                     </div>
-                                </div>
-
-                                {/* Right Side: Test History */}
-                                <div className="st-card" style={{ padding: 0, overflow: 'hidden' }}>
-                                    <div style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                            <History size={18} className="text-indigo-500" />
-                                            <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 900, color: '#1e293b' }}>Recent Test Performance</h3>
+                                </div>                                {/* Right Side: Test History */}
+                                <div className="st-card" style={{ padding: 0, overflow: 'hidden', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+                                    <div style={{ padding: '24px', background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)', color: '#fff' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                                <div style={{ background: 'rgba(255,255,255,0.2)', padding: 10, borderRadius: 12 }}>
+                                                    <History size={24} />
+                                                </div>
+                                                <div>
+                                                    <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900 }}>Academic Journey</h3>
+                                                    <p style={{ margin: 0, fontSize: '0.8rem', opacity: 0.8 }}>Track your test performance over time</p>
+                                                </div>
+                                            </div>
+                                            <div style={{ background: 'rgba(255,255,255,0.15)', padding: '6px 12px', borderRadius: 20, fontSize: '0.75rem', fontWeight: 700, border: '1px solid rgba(255,255,255,0.2)' }}>
+                                                Session 2026-27
+                                            </div>
                                         </div>
-                                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8' }}>Session 2026-27</div>
                                     </div>
-                                    <div style={{ maxHeight: 500, overflowY: 'auto' }}>
+                                    
+                                    <div style={{ maxHeight: 600, overflowY: 'auto', padding: '16px' }}>
                                         {performance?.history?.length === 0 ? (
-                                            <div style={{ padding: 60, textAlign: 'center', color: '#94a3b8' }}>
-                                                <History size={48} style={{ opacity: 0.1, marginBottom: 12 }} />
-                                                <p style={{ fontWeight: 600 }}>No test results published yet.</p>
+                                            <div style={{ padding: 80, textAlign: 'center', color: '#94a3b8' }}>
+                                                <History size={64} style={{ opacity: 0.1, marginBottom: 16 }} />
+                                                <p style={{ fontWeight: 800, fontSize: '1.1rem' }}>No tests recorded yet.</p>
+                                                <p style={{ fontSize: '0.9rem' }}>Your academic achievements will appear here.</p>
                                             </div>
                                         ) : (
-                                            <table className="erp-table stackable" style={{ border: 'none' }}>
-                                                <thead style={{ background: '#f8fafc', position: 'sticky', top: 0 }}>
-                                                    <tr>
-                                                        <th>Test Detail</th>
-                                                        <th>Score Achieved</th>
-                                                        <th style={{ textAlign: 'right' }}>Status</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {performance?.history.slice().reverse().map((h, i) => (
-                                                        <tr key={i} style={{ borderBottom: '1px solid #f8fafc' }}>
-                                                            <td data-label="Test Detail">
-                                                                <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#1e293b' }}>{h.testName}</div>
-                                                                <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 2, display: 'flex', gap: 6, alignItems: 'center' }}>
-                                                                    <BookOpen size={10} /> {h.subject} · {h.chapter}
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                                {performance?.history.slice().reverse().map((h, i) => {
+                                                    const isPass = h.marks >= (h.passingMarks || (h.maxMarks * 0.4));
+                                                    return (
+                                                        <div key={i} style={{ 
+                                                            padding: '20px', 
+                                                            background: '#fff', 
+                                                            borderRadius: 16, 
+                                                            border: '1px solid #f1f5f9',
+                                                            display: 'flex',
+                                                            justifyContent: 'space-between',
+                                                            alignItems: 'center',
+                                                            transition: 'all 0.3s ease',
+                                                            boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                                                        }}>
+                                                            <div style={{ flex: 1 }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                                                    <span style={{ 
+                                                                        padding: '4px 8px', 
+                                                                        background: '#f8fafc', 
+                                                                        borderRadius: 6, 
+                                                                        fontSize: '0.65rem', 
+                                                                        fontWeight: 900, 
+                                                                        color: '#64748b',
+                                                                        border: '1px solid #e2e8f0'
+                                                                    }}>{h.subject}</span>
+                                                                    <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>• {new Date(h.date).toLocaleDateString()}</span>
                                                                 </div>
-                                                            </td>
-                                                            <td data-label="Score Achieved">
-                                                                <div style={{ fontSize: '1rem', fontWeight: 900, color: '#1e293b' }}>{h.percentage.toFixed(1)}%</div>
-                                                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8' }}>{h.marks} / {h.maxMarks}</div>
-                                                            </td>
-                                                            <td style={{ textAlign: 'right' }} data-label="Status">
-                                                                <span className={h.isPresent ? 'bg-positive-light text-positive' : 'bg-negative-light text-negative'} style={{ fontSize: '0.7rem', fontWeight: 900, padding: '4px 10px', borderRadius: 4 }}>
-                                                                    {h.isPresent ? 'APPEARED' : 'ABSENT'}
-                                                                </span>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
+                                                                <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, color: '#1e293b' }}>{h.testName}</h4>
+                                                                <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>Chapter: {h.chapter}</p>
+                                                            </div>
+
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+                                                                <div style={{ textAlign: 'center' }}>
+                                                                    <div style={{ 
+                                                                        fontSize: '1.25rem', 
+                                                                        fontWeight: 900, 
+                                                                        color: h.isPresent ? (isPass ? '#059669' : '#dc2626') : '#94a3b8' 
+                                                                    }}>
+                                                                        {h.isPresent ? `${h.marks}` : '--'}
+                                                                        <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 600 }}> / {h.maxMarks}</span>
+                                                                    </div>
+                                                                    <div style={{ fontSize: '0.7rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                                        {h.isPresent ? `${h.percentage.toFixed(1)}%` : 'Absent'}
+                                                                    </div>
+                                                                </div>
+
+                                                                <div style={{ 
+                                                                    width: 44, 
+                                                                    height: 44, 
+                                                                    borderRadius: '50%', 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center', 
+                                                                    justifyContent: 'center',
+                                                                    background: h.isPresent ? (isPass ? '#ecfdf5' : '#fef2f2') : '#f1f5f9',
+                                                                    color: h.isPresent ? (isPass ? '#059669' : '#dc2626') : '#94a3b8',
+                                                                    border: `2px solid ${h.isPresent ? (isPass ? '#d1fae5' : '#fee2e2') : '#e2e8f0'}`
+                                                                }}>
+                                                                    {h.isPresent ? (isPass ? <CheckCircle2 size={24} /> : <Target size={24} />) : <History size={20} />}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
                                         )}
                                     </div>
+                                    
+                                    {performance?.history?.length > 0 && (
+                                        <div style={{ padding: '20px 24px', background: '#f8fafc', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>Overall Standing</span>
+                                            <div style={{ display: 'flex', gap: 16 }}>
+                                                <div style={{ textAlign: 'right' }}>
+                                                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase' }}>Avg Score</div>
+                                                    <div style={{ fontSize: '0.95rem', fontWeight: 900, color: '#1e293b' }}>{performance.stats.avgScore}%</div>
+                                                </div>
+                                                <div style={{ textAlign: 'right' }}>
+                                                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase' }}>Rank</div>
+                                                    <div style={{ fontSize: '0.95rem', fontWeight: 900, color: '#4f46e5' }}>#{performance.ranks.overall || '--'}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -327,4 +387,3 @@ const StudentDashboard = () => {
 };
 
 export default StudentDashboard;
-

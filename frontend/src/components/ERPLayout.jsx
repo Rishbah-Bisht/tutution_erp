@@ -110,7 +110,8 @@ const ERPLayout = ({ children, title }) => {
                     </div>
                     {!mini && (
                         <div className="sb-brand-copy">
-                            <div className="sb-name">{instituteName}</div>
+                            <div className="sb-name">ERP Institute</div>
+                            {/* <div className="sb-name">{instituteName}</div> */}
 
                         </div>
                     )}

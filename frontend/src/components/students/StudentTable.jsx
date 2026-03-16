@@ -80,7 +80,21 @@ const StudentTable = ({
                             <td data-label="Student Profile" className="!pl-6">
                                 <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate(`/students/${s._id}`)}>
                                     <div className="w-10 h-10 rounded-sm bg-slate-100 flex items-center justify-center text-slate-400 overflow-hidden border">
-                                        {s.profileImage ? <img src={s.profileImage} alt="" className="w-full h-full object-cover" /> : <User size={20} />}
+                                        {s.profileImage ? (
+                                            <img 
+                                                src={s.profileImage} 
+                                                alt="" 
+                                                className="w-full h-full object-cover" 
+                                                onError={(e) => {
+                                                    e.target.onerror = null;
+                                                    e.target.src = ''; 
+                                                    e.target.style.display = 'none';
+                                                    e.target.parentElement.innerHTML = '<div class="text-slate-400"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>';
+                                                }}
+                                            />
+                                        ) : (
+                                            <User size={20} />
+                                        )}
                                     </div>
                                     <div>
                                         <div className="font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">{s.name}</div>

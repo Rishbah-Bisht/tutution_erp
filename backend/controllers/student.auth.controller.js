@@ -381,10 +381,14 @@ exports.getPerformance = async (req, res) => {
 
         const batchId = student.batchId;
 
-        const myResults = await ExamResult.find({ studentId })
+        const myResultsRaw = await ExamResult.find({ studentId })
             .populate('examId')
-            .sort({ 'examId.date': 1 })
             .lean();
+
+        // Manual sort because examId.date is a populated field
+        const myResults = myResultsRaw
+            .filter(r => !!r.examId)
+            .sort((a, b) => new Date(a.examId.date || 0) - new Date(b.examId.date || 0));
 
         const history = myResults.map((result) => ({
             testName: result.examId?.name || 'Unknown',
@@ -393,6 +397,7 @@ exports.getPerformance = async (req, res) => {
             date: result.examId?.date,
             marks: result.marksObtained,
             maxMarks: result.examId?.totalMarks || 100,
+            passingMarks: result.examId?.passingMarks || 40,
             percentage: result.examId?.totalMarks ? (result.marksObtained / result.examId.totalMarks) * 100 : 0,
             isPresent: result.isPresent
         }));

@@ -329,6 +329,7 @@ exports.getAttendanceRoster = async ({ actorRole, actorId, batchId, subjectId, d
         batch,
         subject,
         date: attendanceDate,
+        isMarked: existingAttendance.length > 0,
         students: students.map((student) => ({
             ...student,
             attendanceStatus: attendanceMap.get(student._id.toString())?.status || 'Present',

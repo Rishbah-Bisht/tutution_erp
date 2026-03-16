@@ -146,270 +146,206 @@ const AdminProfilePage = () => {
 
     return (
         <ERPLayout title="Admin Profile">
+            <style>{`
+                .admin-profile-hdr { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); position: relative; overflow: hidden; }
+                .admin-profile-hdr::before { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle, rgba(59,130,246,0.1) 0%, transparent 70%); }
+                .profile-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+                .profile-card:hover { transform: translateY(-2px); box-shadow: 0 12px 24px -8px rgba(0,0,0,0.1); }
+                .info-label { font-size: 10px; font-weight: 900; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+                .info-value { font-size: 0.95rem; font-weight: 800; color: #1e293b; }
+                .premium-btn { transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 12px; font-size: 0.85rem; font-weight: 800; text-transform: uppercase; cursor: pointer; border: none; }
+                .premium-btn-primary { background: #3b82f6; color: white; box-shadow: 0 4px 14px 0 rgba(59,130,246,0.3); }
+                .premium-btn-primary:hover { background: #2563eb; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(59,130,246,0.4); }
+                .premium-btn-secondary { background: #f1f5f9; color: #475569; }
+                .premium-btn-secondary:hover { background: #e2e8f0; }
+                .premium-btn-success { background: #10b981; color: white; box-shadow: 0 4px 14px 0 rgba(16,185,129,0.3); }
+                .premium-btn-success:hover { background: #059669; }
+                .glass-card { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.3); }
+            `}</style>
 
-            <div className="max-w-6xl mx-auto px-4 py-6">
+            <div className="max-w-6xl mx-auto px-6 py-10 animate-in fade-in slide-in-from-bottom-6 duration-700">
+                {alert && (
+                    <div className="mb-8">
+                        <AlertMessage type={alert.type} message={alert.text} onClose={() => setAlert(null)} />
+                    </div>
+                )}
 
-                {alert &&
-                    <AlertMessage
-                        type={alert.type}
-                        message={alert.text}
-                        onClose={() => setAlert(null)}
-                    />
-                }
-
-                <div className="bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
-
-                    {/* HEADER */}
-                    <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-8 py-12">
-
-                        <div className="flex justify-between items-center">
-
-                            <div className="text-white">
-                                <h2 className="text-2xl font-bold uppercase tracking-wide">
-                                    {editMode ? "Edit Profile" : "Admin Profile"}
-                                </h2>
-
-                                <p className="text-xs text-slate-400 mt-1">
-                                    System ID: {profile?._id?.slice(-8)}
-                                </p>
+                <div className="bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-100">
+                    {/* MODERNISED HEADER */}
+                    <div className="admin-profile-hdr px-10 py-16 text-white relative">
+                        <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
+                            <div className="text-center md:text-left">
+                                <span className="inline-block px-4 py-1.5 rounded-full bg-blue-500/20 border border-blue-400/30 text-[10px] font-black uppercase tracking-widest mb-4">
+                                    System Administrator
+                                </span>
+                                <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-2">
+                                    {editMode ? "Refine Profile" : "Institute Portfolio"}
+                                </h1>
+                                <p className="text-slate-400 font-medium max-w-lg">Manage your institution's global identity, contact information, and branding assets.</p>
                             </div>
 
-                            {!editMode ? (
-                                <button
-                                    onClick={() => setEditMode(true)}
-                                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded-lg text-white text-xs font-semibold shadow"
-                                >
-                                    <Pencil size={14} />
-                                    Edit
-                                </button>
-                            ) : (
-                                <div className="flex gap-2">
-
-                                    <button
-                                        onClick={handleCancel}
-                                        className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 px-5 py-2 rounded-lg text-white text-xs font-semibold"
-                                    >
-                                        <X size={14} />
-                                        Cancel
+                            <div className="flex gap-4">
+                                {!editMode ? (
+                                    <button onClick={() => setEditMode(true)} className="premium-btn premium-btn-primary">
+                                        <Pencil size={18} />
+                                        Update Details
                                     </button>
-
-                                    <button
-                                        form="profile-form"
-                                        type="submit"
-                                        className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 px-5 py-2 rounded-lg text-white text-xs font-semibold shadow"
-                                    >
-                                        {submitting ? (
-                                            <Loader2 size={14} className="animate-spin" />
-                                        ) : (
-                                            <Save size={14} />
-                                        )}
-                                        Save
-                                    </button>
-
-                                </div>
-                            )}
-
+                                ) : (
+                                    <>
+                                        <button onClick={handleCancel} className="premium-btn premium-btn-secondary">
+                                            <X size={18} />
+                                            Discard
+                                        </button>
+                                        <button form="profile-form" type="submit" className="premium-btn premium-btn-success">
+                                            {submitting ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                                            {submitting ? 'Updating...' : 'Save Changes'}
+                                        </button>
+                                    </>
+                                )}
+                            </div>
                         </div>
-
                     </div>
 
-                    {/* PROFILE */}
-                    <div className="px-8 -mt-10 relative z-10 flex items-end gap-4">
-
+                    {/* OVERLAPPING AVATAR SECTION */}
+                    <div className="px-10 -mt-12 relative z-20 flex flex-col md:flex-row items-center md:items-end gap-6 mb-12">
                         <div className="relative">
-
-                            <div className="w-28 h-28 bg-white rounded-lg border shadow flex items-center justify-center overflow-hidden">
-
+                            <div className="w-40 h-40 bg-white rounded-[2rem] border-[6px] border-white shadow-2xl flex items-center justify-center overflow-hidden bg-slate-50">
                                 {logoPreview ? (
-                                    <img src={logoPreview} className="w-full h-full object-cover" />
+                                    <img src={logoPreview} className="w-full h-full object-cover" alt="Logo" />
                                 ) : (
-                                    <span className="text-3xl font-bold text-slate-400">
-                                        {(profile?.adminName || "A")[0]}
-                                    </span>
+                                    <School size={64} className="text-slate-300" />
                                 )}
-
                             </div>
-
                             {editMode && (
                                 <button
                                     onClick={() => fileInputRef.current?.click()}
-                                    className="absolute bottom-0 right-0 bg-blue-600 p-2 text-white rounded-lg shadow"
+                                    className="absolute -bottom-2 -right-2 bg-blue-600 p-3 text-white rounded-2xl shadow-xl hover:bg-blue-700 transition-colors transform hover:scale-110 active:scale-95"
                                 >
-                                    <Camera size={14} />
+                                    <Camera size={20} />
                                 </button>
                             )}
-
-                            <input
-                                type="file"
-                                ref={fileInputRef}
-                                className="hidden"
-                                onChange={handleLogoChange}
-                            />
-
+                            <input type="file" ref={fileInputRef} className="hidden" onChange={handleLogoChange} />
                         </div>
 
-                        <div className="pb-3">
-
-                            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <div className="text-center md:text-left pb-4">
+                            <h2 className="text-3xl font-black text-slate-900 flex items-center justify-center md:justify-start gap-3">
                                 {profile?.adminName}
-                                <BadgeCheck size={18} className="text-blue-500" />
-                            </h3>
-
-                            <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest">
+                                <BadgeCheck size={28} className="text-blue-500 fill-current" />
+                            </h2>
+                            <p className="text-sm font-bold text-blue-600 uppercase tracking-widest mt-1">
                                 {profile?.coachingName}
                             </p>
-
+                            <div className="flex items-center justify-center md:justify-start gap-4 mt-3 text-slate-500">
+                                <div className="flex items-center gap-1.5 text-xs font-bold bg-slate-100 px-3 py-1 rounded-full">
+                                    <ShieldCheck size={14} className="text-emerald-500" />
+                                    ID: {profile?._id?.slice(-8).toUpperCase()}
+                                </div>
+                                <div className="flex items-center gap-1.5 text-xs font-bold bg-slate-100 px-3 py-1 rounded-full text-slate-500 uppercase">
+                                    v1.2.0 Stable
+                                </div>
+                            </div>
                         </div>
-
                     </div>
 
-                    {/* BODY */}
-                    <div className="p-8">
-
+                    {/* CONTENT AREA */}
+                    <div className="px-10 pb-16">
                         {!editMode ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                <div className="space-y-8">
+                                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">Administrative Info</h4>
+                                    <div className="space-y-6">
+                                        <InfoBlock icon={<User />} label="Administrator" value={profile?.adminName} />
+                                        <InfoBlock icon={<Mail />} label="Admin Email" value={profile?.email} />
+                                        <InfoBlock icon={<Phone />} label="Admin Contact" value={profile?.phone} />
+                                    </div>
+                                </div>
 
-                            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                <div className="space-y-8">
+                                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">Institutional Details</h4>
+                                    <div className="space-y-6">
+                                        <InfoBlock icon={<School />} label="Institute Name" value={profile?.coachingName} />
+                                        <InfoBlock icon={<Mail />} label="Institute Email" value={profile?.instituteEmail} />
+                                        <InfoBlock icon={<Phone />} label="Institute Phone" value={profile?.institutePhone} />
+                                    </div>
+                                </div>
 
-                                <InfoBlock icon={<Mail />} label="Admin Email" value={profile?.email} />
-                                <InfoBlock icon={<Mail />} label="Institute Email" value={profile?.instituteEmail} />
-                                <InfoBlock icon={<Phone />} label="Admin Phone" value={profile?.phone} />
-                                <InfoBlock icon={<Phone />} label="Institute Phone" value={profile?.institutePhone} />
-                                <InfoBlock icon={<FileDigit />} label="Registration ID" value={profile?.registrationNumber} />
-                                <InfoBlock icon={<Home />} label="Rooms Available" value={profile?.roomsAvailable} />
-
-                                <InfoBlock
-                                    icon={<MapPin />}
-                                    label="Institute Address"
-                                    value={profile?.instituteAddress}
-                                    full
-                                />
-
+                                <div className="space-y-8">
+                                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">Operational Data</h4>
+                                    <div className="space-y-6">
+                                        <InfoBlock icon={<FileDigit />} label="Reg. Number" value={profile?.registrationNumber} />
+                                        <InfoBlock icon={<Home />} label="Rooms Available" value={profile?.roomsAvailable} />
+                                        <InfoBlock icon={<MapPin />} label="Address" value={profile?.instituteAddress} />
+                                    </div>
+                                </div>
                             </div>
-
                         ) : (
-
-                            <form
-                                id="profile-form"
-                                onSubmit={handleSaveRequest}
-                                className="grid md:grid-cols-2 gap-6"
-                            >
-
-                                <FormInput
-                                    label="Admin Name"
-                                    name="adminName"
-                                    value={form.adminName}
-                                    onChange={handle}
-                                />
-
-                                <FormInput
-                                    label="Institute Name"
-                                    name="coachingName"
-                                    value={form.coachingName}
-                                    onChange={handle}
-                                />
-
-                                <FormInput
-                                    label="Admin Email"
-                                    name="email"
-                                    value={form.email}
-                                    onChange={handle}
-                                />
-
-                                <FormInput
-                                    label="Institute Email"
-                                    name="instituteEmail"
-                                    value={form.instituteEmail}
-                                    onChange={handle}
-                                />
-
-                                <FormInput
-                                    label="Admin Phone"
-                                    name="phone"
-                                    value={form.phone}
-                                    onChange={handle}
-                                />
-
-                                <FormInput
-                                    label="Institute Phone"
-                                    name="institutePhone"
-                                    value={form.institutePhone}
-                                    onChange={handle}
-                                />
-
-                                <FormInput
-                                    label="Rooms Available"
-                                    name="roomsAvailable"
-                                    value={form.roomsAvailable}
-                                    onChange={handle}
-                                />
-
-                                <FormInput
-                                    label="Registration Number"
-                                    name="registrationNumber"
-                                    value={form.registrationNumber}
-                                    onChange={handle}
-                                />
-
+                            <form id="profile-form" onSubmit={handleSaveRequest} className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8 bg-slate-50/50 p-10 rounded-[2rem] border border-slate-100">
+                                <div className="space-y-6">
+                                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Profile Settings</h4>
+                                    <FormInput label="Admin Name" name="adminName" value={form.adminName} onChange={handle} placeholder="Full Name" />
+                                    <FormInput label="Institute Name" name="coachingName" value={form.coachingName} onChange={handle} placeholder="Coaching Name" />
+                                    <FormInput label="Admin Email" name="email" value={form.email} onChange={handle} placeholder="email@admin.com" />
+                                    <FormInput label="Admin Phone" name="phone" value={form.phone} onChange={handle} placeholder="+91 00000 00000" />
+                                </div>
+                                <div className="space-y-6">
+                                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Institute Configuration</h4>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <FormInput label="Reg. No" name="registrationNumber" value={form.registrationNumber} onChange={handle} />
+                                        <FormInput label="Rooms" name="roomsAvailable" value={form.roomsAvailable} onChange={handle} type="number" />
+                                    </div>
+                                    <FormInput label="Institute Email" name="instituteEmail" value={form.instituteEmail} onChange={handle} />
+                                    <FormInput label="Institute Phone" name="institutePhone" value={form.institutePhone} onChange={handle} />
+                                </div>
                                 <div className="md:col-span-2">
-                                    <label className="text-xs font-semibold text-slate-500 mb-1 block">
-                                        Institute Address
-                                    </label>
-
+                                    <label className="info-label"><MapPin size={14} /> Full Address</label>
                                     <textarea
                                         name="instituteAddress"
                                         value={form.instituteAddress}
                                         onChange={handle}
-                                        className="w-full border border-slate-200 rounded-md p-3 text-sm"
+                                        rows={4}
+                                        className="w-full bg-white border-2 border-slate-100 rounded-2xl p-4 text-sm font-bold text-slate-800 focus:border-blue-500 outline-none transition-all shadow-inner"
+                                        placeholder="Complete street address..."
                                     />
                                 </div>
-
                             </form>
-
                         )}
-
                     </div>
-
                 </div>
-
             </div>
 
             <ActionModal
                 isOpen={showConfirm}
                 onClose={() => setShowConfirm(false)}
                 onConfirm={confirmUpdate}
-                title="Verify Changes"
-                description="Enter admin password to confirm these updates."
+                title="Secure Verification"
+                description="This action will globally update your institute's public identity. Please provide your admin credentials to authorize this change."
                 actionType="verify"
                 loading={submitting}
             />
-
         </ERPLayout>
     );
 };
 
-// COMPONENTS
-
-const InfoBlock = ({ icon, label, value, full }) => (
-    <div className={`${full ? "md:col-span-2 lg:col-span-3" : ""} space-y-1`}>
-        <div className="flex items-center gap-2 text-slate-400 text-xs uppercase font-semibold tracking-widest">
-            {React.cloneElement(icon, { size: 14 })}
+// MODERNISED SUB-COMPONENTS
+const InfoBlock = ({ icon, label, value }) => (
+    <div className="profile-card group">
+        <div className="info-label">
+            {React.cloneElement(icon, { size: 14, className: "group-hover:text-blue-500 transition-colors" })}
             {label}
         </div>
-        <p className="text-sm font-semibold text-slate-800">{value || "N/A"}</p>
+        <p className="info-value truncate" title={value}>{value || "Not Set"}</p>
     </div>
 );
 
-const FormInput = ({ label, ...props }) => (
-    <div>
-        <label className="text-xs font-semibold text-slate-500 block mb-1">
-            {label}
-        </label>
-
+const FormInput = ({ label, type = "text", ...props }) => (
+    <div className="space-y-2">
+        <label className="info-label">{label}</label>
         <input
             {...props}
-            className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm focus:border-blue-500 outline-none"
+            type={type}
+            className="w-full bg-white border-2 border-slate-100 rounded-2xl px-5 py-3.5 text-sm font-bold text-slate-800 focus:border-blue-500 outline-none transition-all shadow-sm"
         />
     </div>
 );
 
-export default AdminProfilePage;
+export default AdminProfilePage;

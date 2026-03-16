@@ -65,10 +65,21 @@ const StudentProfileModal = ({ isOpen, onClose, student, onDownloadID }) => {
                                 <div style={{
                                     width: 120, height: 120, borderRadius: sharpRadius,
                                     background: '#f1f5f9', overflow: 'hidden', flexShrink: 0,
-                                    border: `2px solid ${borderColor}`
+                                    border: `2px solid ${borderColor}`,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center'
                                 }}>
                                     {student.profileImage ? (
-                                        <img src={student.profileImage.startsWith('http') ? student.profileImage : `${API_BASE_URL}${student.profileImage}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
+                                        <img 
+                                            src={student.profileImage.startsWith('http') ? student.profileImage : `${API_BASE_URL}${student.profileImage}`} 
+                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                            alt="" 
+                                            onError={(e) => {
+                                                e.target.onerror = null;
+                                                e.target.src = '';
+                                                e.target.style.display = 'none';
+                                                e.target.parentElement.innerHTML = `<div style="color: #000"><svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>`;
+                                            }}
+                                        />
                                     ) : (
                                         <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000' }}>
                                             <User size={60} />
@@ -90,7 +101,7 @@ const StudentProfileModal = ({ isOpen, onClose, student, onDownloadID }) => {
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px 32px', color: '#475569', fontSize: '0.85rem', fontWeight: 700 }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Hash size={16} /> ROLL: {student.rollNo}</div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><GraduationCap size={16} /> {student.className || 'General'}</div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Building2 size={16} /> BATCH: {student.batchId?.name || student.batchName || 'â€”'}</div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Building2 size={16} /> BATCH: {student.batchId?.name || student.batchName || '—'}</div>
                                     </div>
                                 </div>
 
@@ -123,14 +134,14 @@ const StudentProfileModal = ({ isOpen, onClose, student, onDownloadID }) => {
                                 <div style={{ background: '#fff', borderRadius: sharpRadius, border: `2px solid ${borderColor}`, padding: '24px' }}>
                                     <SectionHeading title="Identity & Family Details" icon={UserCircle2} color="#000" />
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
-                                        <DetailItem label="DATE OF BIRTH" value={student.dob ? new Date(student.dob).toLocaleDateString() : 'â€”'} icon={Calendar} />
-                                        <DetailItem label="GENDER" value={student.gender || 'â€”'} icon={User} />
-                                        <DetailItem label="FATHER'S NAME" value={student.fatherName || 'â€”'} icon={Info} />
-                                        <DetailItem label="MOTHER'S NAME" value={student.motherName || 'â€”'} icon={Info} />
-                                        <DetailItem label="WHATSAPP NUMBER" value={student.contact || 'â€”'} icon={Phone} />
-                                        <DetailItem label="EMAIL ADDRESS" value={student.email || 'â€”'} icon={Mail} />
+                                        <DetailItem label="DATE OF BIRTH" value={student.dob ? new Date(student.dob).toLocaleDateString() : '—'} icon={Calendar} />
+                                        <DetailItem label="GENDER" value={student.gender || '—'} icon={User} />
+                                        <DetailItem label="FATHER'S NAME" value={student.fatherName || '—'} icon={Info} />
+                                        <DetailItem label="MOTHER'S NAME" value={student.motherName || '—'} icon={Info} />
+                                        <DetailItem label="WHATSAPP NUMBER" value={student.contact || '—'} icon={Phone} />
+                                        <DetailItem label="EMAIL ADDRESS" value={student.email || '—'} icon={Mail} />
                                         <DetailItem label="ADMISSION DATE" value={new Date(student.admissionDate || student.joinedAt).toLocaleDateString()} icon={Calendar} />
-                                        <DetailItem label="ACADEMIC SESSION" value={student.session || 'â€”'} icon={Calendar} />
+                                        <DetailItem label="ACADEMIC SESSION" value={student.session || '—'} icon={Calendar} />
                                         <DetailItem label="REGISTRATION FEE" value={`₹ ${student.registrationFee || 0}`} icon={IndianRupee} />
                                     </div>
                                 </div>
@@ -183,7 +194,7 @@ const StudentProfileModal = ({ isOpen, onClose, student, onDownloadID }) => {
                                 <div style={{ background: '#fff', borderRadius: sharpRadius, border: `2px solid ${borderColor}`, padding: '24px' }}>
                                     <SectionHeading title="Residence" icon={MapPin} color="#000" />
                                     <p style={{ fontSize: '0.65rem', fontWeight: 900, color: '#000', textTransform: 'uppercase', marginBottom: '8px' }}>Full Address</p>
-                                    <p style={{ fontSize: '0.9rem', fontWeight: 700, color: '#1e293b', lineHeight: 1.5 }}>{student.address || 'â€”'}</p>
+                                    <p style={{ fontSize: '0.9rem', fontWeight: 700, color: '#1e293b', lineHeight: 1.5 }}>{student.address || '—'}</p>
                                 </div>
 
                                 {/* Administrative Actions */}

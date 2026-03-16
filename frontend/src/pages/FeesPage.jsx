@@ -785,8 +785,22 @@ const FeesPage = () => {
                                         </td>
                                         <td data-label="Student">
                                             <div className="flex items-center gap-3">
-                                                <div className="tb-avatar" style={{ width: 32, height: 32, fontSize: 13 }}>
-                                                    {f.studentId?.name?.charAt(0)}
+                                                <div className="tb-avatar overflow-hidden border border-slate-200" style={{ width: 32, height: 32, fontSize: 13, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    {f.studentId?.profileImage ? (
+                                                        <img 
+                                                            src={f.studentId.profileImage.startsWith('http') ? f.studentId.profileImage : `${API_BASE_URL}${f.studentId.profileImage}`} 
+                                                            alt="" 
+                                                            className="w-full h-full object-cover"
+                                                            onError={(e) => {
+                                                                e.target.onerror = null;
+                                                                e.target.src = '';
+                                                                e.target.style.display = 'none';
+                                                                e.target.parentElement.innerHTML = `<span class="text-slate-400 font-bold">${f.studentId?.name?.charAt(0)}</span>`;
+                                                            }}
+                                                        />
+                                                    ) : (
+                                                        <span className="text-slate-400 font-bold">{f.studentId?.name?.charAt(0)}</span>
+                                                    )}
                                                 </div>
                                                 <div>
                                                     <div className="td-bold">{f.studentId?.name || 'Deactivated'}</div>

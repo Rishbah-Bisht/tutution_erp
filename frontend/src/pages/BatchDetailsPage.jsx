@@ -345,9 +345,19 @@ const BatchDetailsPage = () => {
                                                 <tr key={student._id} className="hover:bg-slate-50/50 transition-colors group">
                                                     <td className="px-6 py-4" data-label="Student">
                                                         <div className="flex items-center gap-3">
-                                                            <div className="w-8 h-8 rounded-full bg-slate-100 flex-shrink-0 overflow-hidden">
+                                                            <div className="w-8 h-8 rounded-full bg-slate-100 flex-shrink-0 overflow-hidden border border-slate-200 flex items-center justify-center">
                                                                 {student.profileImage ? (
-                                                                    <img src={`${API_BASE_URL}/${student.profileImage.replace(/\\/g, '/')}`} alt="" className="w-full h-full object-cover" />
+                                                                    <img 
+                                                                        src={student.profileImage.startsWith('http') ? student.profileImage : `${API_BASE_URL}${student.profileImage.startsWith('/') ? '' : '/'}${student.profileImage.replace(/\\/g, '/')}`} 
+                                                                        alt="" 
+                                                                        className="w-full h-full object-cover" 
+                                                                        onError={(e) => {
+                                                                            e.target.onerror = null;
+                                                                            e.target.src = '';
+                                                                            e.target.style.display = 'none';
+                                                                            e.target.parentElement.innerHTML = `<div class="text-slate-400"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>`;
+                                                                        }}
+                                                                    />
                                                                 ) : (
                                                                     <div className="w-full h-full flex items-center justify-center text-slate-400">
                                                                         <User size={16} />
