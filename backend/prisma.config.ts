@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
-import { defineConfig, env } from "prisma/config";
+import { defineConfig } from "prisma/config";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,6 +16,7 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: env("POSTGRES_DATABASE_URL"),
+    // Use process.env with a placeholder so `prisma generate` succeeds at build time
+    url: process.env.POSTGRES_DATABASE_URL || "postgresql://placeholder:placeholder@localhost:5432/placeholder",
   },
 });
