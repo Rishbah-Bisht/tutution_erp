@@ -162,16 +162,20 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Database Connection
-connectDB().then(() => {
-    // Seed templates if needed
-    require('./controllers/template.controller').seedDefaults();
-}).catch((error) => {
-    console.error('❌ CRITICAL: MongoDB initialization failed:', error.message);
-});
-
-connectPostgres().catch((error) => {
-    console.warn(`[Postgres] Initialization skipped or failed: ${error.message}`);
+// Database Connections (Parallelized for Vercel Cold Start optimization)
+Promise.allSettled([
+    connectDB().then(() => {
+        // Seed templates if needed
+        require('./controllers/template.controller').seedDefaults();
+    }),
+    connectPostgres()
+]).then((results) => {
+    results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+            const dbName = index === 0 ? 'MongoDB' : 'Postgres';
+            console.error(`❌ CRITICAL: ${dbName} initialization failed:`, result.reason.message);
+        }
+    });
 });
 
 // 404 Handler for API

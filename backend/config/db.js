@@ -22,14 +22,19 @@ const connectDB = async (retries = 5, delay = 5000) => {
         throw new Error('MONGODB_URI is not defined');
     }
 
+    const isProc = process.env.NODE_ENV === 'production';
+    const finalRetries = isProc ? 1 : retries;
+    const finalDelay = isProc ? 1000 : delay;
+
     const options = {
-        serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
-        socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
+        serverSelectionTimeoutMS: isProc ? 2000 : 5000, 
+        socketTimeoutMS: 45000, 
     };
 
-    while (retries > 0) {
+    let currentRetry = finalRetries;
+    while (currentRetry > 0) {
         try {
-            console.log(`Connecting to MongoDB... (Attempts remaining: ${retries})`);
+            console.log(`Connecting to MongoDB... (Attempts remaining: ${currentRetry})`);
 
             cachedConnection = await mongoose.connect(MONGODB_URI, options);
 
@@ -46,10 +51,10 @@ const connectDB = async (retries = 5, delay = 5000) => {
 
             return cachedConnection;
         } catch (error) {
-            retries -= 1;
+            currentRetry -= 1;
             console.error(`❌ MongoDB connection failed: ${error.message}`);
 
-            if (retries === 0) {
+            if (currentRetry === 0) {
                 console.error('Max retries reached. Database connection could not be established.');
                 // In production, you might not want to exit if it's a serverless function
                 // but for a standalone server, exit is often better than running in a broken state.
@@ -59,10 +64,10 @@ const connectDB = async (retries = 5, delay = 5000) => {
                 throw error;
             }
 
-            console.log(`Retrying in ${delay / 1000}s...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
+            console.log(`Retrying in ${finalDelay / 1000}s...`);
+            await new Promise(resolve => setTimeout(resolve, finalDelay));
             // Exponential backoff
-            delay *= 1.5;
+            // finalDelay *= 1.5; // Avoid exponential backoff in Vercel to stay within limit
         }
     }
 };
