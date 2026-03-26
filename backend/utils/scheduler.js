@@ -1,5 +1,4 @@
 const cron = require('node-cron');
-const { generatePayrollForMonth } = require('../services/prismaPayrollService');
 const Notification = require('../models/Notification');
 const { sendNotificationBatch } = require('../services/notificationService');
 
@@ -8,32 +7,7 @@ const { sendNotificationBatch } = require('../services/notificationService');
  * Scheduled to run at 00:00 on the 1st day of every month.
  */
 const initSalaryScheduler = () => {
-    cron.schedule('0 0 1 * *', async () => {
-        const now = new Date();
-        const monthYear = now.toISOString().slice(0, 7);
-
-        console.log(`[Scheduler] [${now.toISOString()}] Starting automated salary generation for ${monthYear}...`);
-
-        try {
-            const result = await generatePayrollForMonth({
-                payrollMonth: monthYear,
-                actorId: 'salary-scheduler',
-                actorRole: 'system'
-            });
-
-            console.log(
-                `[Scheduler] Payroll generation complete for ${monthYear}: generated=${result.generatedCount}, existing=${result.existingCount}, skipped=${result.skippedCount}`
-            );
-
-            if (result.warnings.length > 0) {
-                console.warn('[Scheduler] Payroll warnings:', result.warnings);
-            }
-        } catch (err) {
-            console.error('[Scheduler] Critical error in salary generation:', err);
-        }
-    });
-
-    console.log('[Scheduler] Salary generation service initialized.');
+    console.log('[Scheduler] Salary generation disabled (PostgreSQL/Prisma features removed).');
 };
 
 /**

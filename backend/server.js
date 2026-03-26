@@ -6,7 +6,6 @@ const path = require('path');
 const { loadBackendEnv } = require('./config/env');
 loadBackendEnv();
 const connectDB = require('./config/db');
-const { connectPostgres } = require('./config/postgres');
 const errorHandler = require('./middleware/errorHandler');
 
 const rateLimit = require('express-rate-limit');
@@ -14,13 +13,10 @@ const rateLimit = require('express-rate-limit');
 const adminRoutes = require('./routes/adminRoutes');
 const adminWorkRoutes = require('./routes/admin.work');
 const studentRoutes = require('./routes/student.routes');
-const prismaFeeRoutes = require('./routes/fees');
 const batchRoutes = require('./routes/batch.routes');
 const schedulerRoutes = require('./routes/scheduler.routes');
 const settingsRoutes = require('./routes/settings.routes');
 const teacherRoutes = require('./routes/teacher.routes');
-const payrollRoutes = require('./routes/payroll');
-const expenseRoutes = require('./routes/expenses');
 const eventRoutes = require('./routes/event.routes');
 const examRoutes = require('./routes/exam.routes');
 const notificationRoutes = require('./routes/notificationRoutes');
@@ -62,7 +58,6 @@ const allowedOrigins = [
 console.log('--- Server Startup Internal Diagnostics ---');
 console.log('ALLOWED_ORIGINS:', allowedOrigins);
 console.log('MONGODB_URI configured:', !!process.env.MONGODB_URI);
-console.log('POSTGRES_DATABASE_URL configured:', !!process.env.POSTGRES_DATABASE_URL);
 console.log('-------------------------------------------');
 
 app.use(cors({
@@ -130,13 +125,10 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api/admin', adminRoutes); // Auth & basic profile
 app.use('/api/admin', adminWorkRoutes); // Work/Dashboard data
 app.use('/api/students', studentRoutes);
-app.use('/api/fees', prismaFeeRoutes);
 app.use('/api/batches', batchRoutes);
 app.use('/api/scheduler', schedulerRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/teachers', teacherRoutes);
-app.use('/api/payroll', payrollRoutes);
-app.use('/api/expenses', expenseRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/exams', examRoutes);
 app.use('/api/notifications', notificationRoutes);
@@ -164,21 +156,15 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Database Connections (Parallelized for Vercel Cold Start optimization)
-Promise.allSettled([
-    connectDB().then(() => {
+// Database connection bootstrap (MongoDB only)
+connectDB()
+    .then(() => {
         // Seed templates if needed
         require('./controllers/template.controller').seedDefaults();
-    }),
-    connectPostgres()
-]).then((results) => {
-    results.forEach((result, index) => {
-        if (result.status === 'rejected') {
-            const dbName = index === 0 ? 'MongoDB' : 'Postgres';
-            console.error(`❌ CRITICAL: ${dbName} initialization failed:`, result.reason.message);
-        }
+    })
+    .catch((error) => {
+        console.error('❌ CRITICAL: MongoDB initialization failed:', error.message);
     });
-});
 
 // 404 Handler for API
 app.use('/api', (req, res) => {

@@ -3,7 +3,6 @@ const TeacherAssignment = require('../models/TeacherAssignment');
 const Student = require('../models/Student');
 const Exam = require('../models/Exam');
 const ExamResult = require('../models/ExamResult');
-const { getPrismaClient, connectPostgres } = require('../config/postgres');
 
 const getTeacherBatchIds = async (teacherId) => {
     const assignments = await TeacherAssignment.find({ teacherId, isActive: true })
@@ -125,55 +124,7 @@ exports.getTeacherExamResults = async (req, res) => {
 
 exports.getTeacherSalaries = async (req, res) => {
     try {
-        await connectPostgres();
-        const prisma = getPrismaClient();
-        const teacherId = req.userId;
-
-        const records = await prisma.payrollRecord.findMany({
-            where: { teacherId },
-            include: {
-                deductions: {
-                    orderBy: { createdAt: 'asc' }
-                }
-            },
-            orderBy: [
-                { payrollMonth: 'desc' },
-                { createdAt: 'desc' }
-            ]
-        });
-
-        const COMPATIBILITY_STATUS_MAP = {
-            'PAID': 'Paid',
-            'PARTIALLY_PAID': 'Processing',
-            'PENDING': 'Pending'
-        };
-
-        const mapped = records.map(record => {
-            const leaveDeductions = record.deductions
-                .filter(d => d.deductionType === 'LEAVE')
-                .reduce((sum, d) => sum + Number(d.amount), 0);
-            const advanceDeductions = record.deductions
-                .filter(d => d.deductionType === 'ADVANCE')
-                .reduce((sum, d) => sum + Number(d.amount), 0);
-
-            return {
-                _id: record.id,
-                monthYear: record.payrollMonth,
-                baseSalary: Number(record.baseSalary),
-                extraClassesAmount: Number(record.extraClassesAmount || 0),
-                bonusAmount: Number(record.bonusAmount || 0),
-                leaveDeductions,
-                advanceDeductions,
-                netSalary: Number(record.netSalary),
-                status: COMPATIBILITY_STATUS_MAP[record.status] || 'Pending',
-                paymentMethod: record.paymentMethod,
-                transactionId: record.paymentReference,
-                paymentDate: record.paymentDate,
-                createdAt: record.createdAt
-            };
-        });
-
-        res.json(mapped);
+        res.json([]);
     } catch (error) {
         res.status(500).json({ message: error.message || 'Failed to load salaries.' });
     }

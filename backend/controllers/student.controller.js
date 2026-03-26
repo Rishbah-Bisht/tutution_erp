@@ -4,7 +4,6 @@ const Attendance = require('../models/Attendance');
 const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
 const { triggerAutomaticNotification } = require('../services/notificationService');
-const { connectPostgres, getPrismaClient } = require('../config/postgres');
 
 const getActivityConfig = () => ({
     onlineMinutes: Math.max(parseInt(process.env.ACTIVITY_ONLINE_MINUTES || '5', 10) || 5, 1),
@@ -106,8 +105,6 @@ const toActivityFilters = (query = {}) => {
     return { activityStatus, studentStatus };
 };
 
-const toMoney = (value) => Number(Number(value || 0).toFixed(2));
-
 // GET /api/students/stats
 exports.getStudentStats = async (req, res) => {
     try {
@@ -115,30 +112,7 @@ exports.getStudentStats = async (req, res) => {
         const active = await Student.countDocuments({ status: 'active' });
         const completed = await Student.countDocuments({ status: 'completed' });
 
-        let feePending = 0;
-        try {
-            await connectPostgres();
-            const prisma = getPrismaClient();
-            const pendingBalances = await prisma.feeBalance.findMany({
-                where: {
-                    status: { in: ['PENDING', 'OVERDUE'] }
-                },
-                select: {
-                    studentId: true
-                }
-            });
-
-            const pendingFeeStudentIds = pendingBalances
-                .map((row) => row.studentId)
-                .filter((id) => mongoose.Types.ObjectId.isValid(id));
-
-            feePending = await Student.countDocuments({
-                _id: { $in: pendingFeeStudentIds },
-                status: 'active'
-            });
-        } catch (error) {
-            console.warn('[StudentStats] Prisma fee balances unavailable:', error.message);
-        }
+        const feePending = 0;
 
         // New admissions this month
         const startOfMonth = new Date();
@@ -491,15 +465,6 @@ exports.deleteStudent = async (req, res) => {
         const student = await Student.findByIdAndDelete(req.params.id);
         if (!student) return res.status(404).json({ message: 'Student not found' });
 
-        try {
-            await connectPostgres();
-            const prisma = getPrismaClient();
-            await prisma.feePayment.deleteMany({ where: { studentId: student._id.toString() } });
-            await prisma.feeBalance.deleteMany({ where: { studentId: student._id.toString() } });
-        } catch (error) {
-            console.warn('[deleteStudent] Prisma fee cleanup skipped:', error.message);
-        }
-
         res.json({ message: 'Deleted' });
     } catch (err) {
         res.status(500).json({ message: 'Server error', error: err.message });
@@ -510,15 +475,6 @@ exports.deleteStudent = async (req, res) => {
 exports.deleteAllStudents = async (req, res) => {
     try {
         await Student.deleteMany({});
-
-        try {
-            await connectPostgres();
-            const prisma = getPrismaClient();
-            await prisma.feePayment.deleteMany({});
-            await prisma.feeBalance.deleteMany({});
-        } catch (error) {
-            console.warn('[deleteAllStudents] Prisma fee cleanup skipped:', error.message);
-        }
 
         res.json({ message: 'All students deleted successfully' });
     } catch (err) {
@@ -678,39 +634,6 @@ exports.getStudentById = async (req, res) => {
         if (!student) return res.status(404).json({ message: 'Student not found' });
         let feeBalance = null;
         let feePayments = [];
-
-        try {
-            await connectPostgres();
-            const prisma = getPrismaClient();
-            const studentId = student._id.toString();
-            const [balanceRecord, paymentRecords] = await Promise.all([
-                prisma.feeBalance.findUnique({
-                    where: { studentId }
-                }),
-                prisma.feePayment.findMany({
-                    where: { studentId },
-                    orderBy: { paymentDate: 'desc' }
-                })
-            ]);
-
-            feeBalance = balanceRecord ? {
-                ...balanceRecord,
-                totalCharged: toMoney(balanceRecord.totalCharged),
-                totalPaid: toMoney(balanceRecord.totalPaid),
-                currentBalance: toMoney(balanceRecord.currentBalance),
-                overdueAmount: toMoney(balanceRecord.overdueAmount),
-                status: String(balanceRecord.status || '').toLowerCase()
-            } : null;
-
-            feePayments = paymentRecords.map((payment) => ({
-                ...payment,
-                amount: toMoney(payment.amount),
-                balanceBeforePayment: toMoney(payment.balanceBeforePayment),
-                balanceAfterPayment: toMoney(payment.balanceAfterPayment)
-            }));
-        } catch (error) {
-            console.warn('[getStudentById] Prisma fee lookup unavailable:', error.message);
-        }
 
         const { start, end } = getAttendanceDateRange();
         const attendanceMap = await buildAttendanceSummaryMap([student._id], { dateFrom: start, dateTo: end });

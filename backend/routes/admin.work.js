@@ -5,7 +5,6 @@ const Batch = require('../models/Batch');
 const Attendance = require('../models/Attendance');
 const jwt = require('jsonwebtoken');
 const { requireEnv } = require('../config/env');
-const { connectPostgres, getPrismaClient } = require('../config/postgres');
 
 const JWT_SECRET = requireEnv('JWT_SECRET');
 
@@ -35,19 +34,6 @@ router.get('/', auth, async (req, res) => {
         const onlineThreshold = new Date(now.getTime() - onlineMinutes * 60 * 1000);
         const inactiveThreshold = new Date(now.getTime() - inactiveDays * 24 * 60 * 60 * 1000);
         let totalFeesPaid = 0;
-
-        try {
-            await connectPostgres();
-            const prisma = getPrismaClient();
-            const feePaymentAggregate = await prisma.feePayment.aggregate({
-                _sum: {
-                    amount: true
-                }
-            });
-            totalFeesPaid = Number(feePaymentAggregate._sum.amount || 0);
-        } catch (error) {
-            console.warn('[AdminDashboard] Prisma fee aggregate unavailable:', error.message);
-        }
 
         // Core counts
         const [totalStudents, totalTeachers, activeBatches, activityStats] = await Promise.all([
