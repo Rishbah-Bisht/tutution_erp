@@ -50,8 +50,8 @@ const errorHandler = (err, req, res, next) => {
     // Default Error
     res.status(err.status || 500).json({
         success: false,
-        message: err.message || 'Internal Server Error',
-        // Show stack trace only in development
+        message: err.message || 'An unexpected error occurred',
+        error: err.message, // Show message even in production for now
         stack: process.env.NODE_ENV === 'production' ? undefined : err.stack
     });
 };

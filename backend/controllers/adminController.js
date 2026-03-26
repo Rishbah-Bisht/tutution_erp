@@ -29,6 +29,13 @@ exports.signup = async (req, res) => {
             instituteAddress, instituteEmail, institutePhone
         } = req.body;
         console.log('[Signup] New attempt:', { adminName, email, coachingName });
+        
+        // Explicitly check DB connection
+        const mongoose = require('mongoose');
+        if (mongoose.connection.readyState !== 1) {
+            console.error('[SignupError] MongoDB not connected. Status:', mongoose.connection.readyState);
+            return res.status(503).json({ message: 'Database connecting, please try again in a few seconds.', status: mongoose.connection.readyState });
+        }
 
         const adminExists = await Admin.countDocuments() > 0;
         if (adminExists) {
@@ -165,7 +172,11 @@ exports.updateProfile = async (req, res) => {
 
         res.json({ message: 'Profile updated successfully', admin: updatedAdmin });
     } catch (err) {
-        res.status(500).json({ message: 'Server error', error: err.message });
+        res.status(500).json({
+            message: err.message || 'An unexpected error occurred',
+            error: process.env.NODE_ENV === 'production' ? err.message : err.message, // Explicitly show message
+            stack: process.env.NODE_ENV === 'production' ? undefined : err.stack
+        });
     }
 };
 
