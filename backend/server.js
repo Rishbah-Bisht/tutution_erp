@@ -58,6 +58,13 @@ const allowedOrigins = [
     process.env.CORS_ORIGIN
 ].filter(Boolean);
 
+// Log start-up diagnostics
+console.log('--- Server Startup Internal Diagnostics ---');
+console.log('ALLOWED_ORIGINS:', allowedOrigins);
+console.log('MONGODB_URI configured:', !!process.env.MONGODB_URI);
+console.log('POSTGRES_DATABASE_URL configured:', !!process.env.POSTGRES_DATABASE_URL);
+console.log('-------------------------------------------');
+
 app.use(cors({
     origin: function (origin, callback) {
         // Allow requests with no origin (mobile apps, curl, etc.)
@@ -159,10 +166,12 @@ app.get('/api/health', (req, res) => {
 connectDB().then(() => {
     // Seed templates if needed
     require('./controllers/template.controller').seedDefaults();
+}).catch((error) => {
+    console.error('❌ CRITICAL: MongoDB initialization failed:', error.message);
 });
 
 connectPostgres().catch((error) => {
-    console.warn(`[Postgres] Initialization skipped: ${error.message}`);
+    console.warn(`[Postgres] Initialization skipped or failed: ${error.message}`);
 });
 
 // 404 Handler for API
