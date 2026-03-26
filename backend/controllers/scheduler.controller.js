@@ -456,6 +456,193 @@ exports.autoScheduleBatch = async (req, res) => {
 };
 
 // Helper to sync manual batch schedule changes to the centralized Schedule collection
+// POST /api/scheduler/smart-auto
+exports.smartAutoSchedule = async (req, res) => {
+    try {
+        const { batchId, days, timeSlots, subjectsConfig, startTime } = req.body;
+
+        if (!batchId || !days || !timeSlots || !subjectsConfig || !startTime) {
+            return res.status(400).json({ message: 'Missing required parameters.' });
+        }
+
+        const batch = await Batch.findById(batchId);
+        if (!batch) return res.status(404).json({ message: 'Batch not found.' });
+
+        const startIndex = timeSlots.indexOf(startTime);
+        if (startIndex === -1) {
+            return res.status(400).json({ message: 'Invalid start time.' });
+        }
+
+        // 1. Verify Teacher Assignments & Cache Teacher Names
+        const teachers = await Teacher.find({ status: 'active' });
+        const teacherMap = {}; 
+        
+        for (const config of subjectsConfig) {
+            const subName = config.subject;
+            const assigned = teachers.filter(t => 
+                t.assignments?.some(a => 
+                    (a.batchId?.toString() === batchId || a.batchName === batch.name) &&
+                    a.subjects?.includes(subName)
+                )
+            );
+            
+            if (assigned.length === 0) {
+                return res.status(400).json({ 
+                    message: `Please assign a teacher to the subject "${subName}" first.`,
+                    type: 'TEACHER_MISSING',
+                    subject: subName
+                });
+            }
+            teacherMap[subName] = assigned.map(t => t.name);
+        }
+
+        // 2. Fetch Global Occupancy
+        const allSchedules = await Schedule.find({ batchId: { $ne: batchId } });
+        const occupancy = {}; 
+        allSchedules.forEach(s => {
+            const key = `${s.day}-${s.timeSlot}`;
+            if (!occupancy[key]) occupancy[key] = { rooms: new Set(), teachers: new Set() };
+            occupancy[key].rooms.add(s.roomAllotted);
+            if (s.teacher) occupancy[key].teachers.add(s.teacher);
+        });
+
+        const admin = await Admin.findOne().select('roomsAvailable');
+        const roomCount = parseInt(admin?.roomsAvailable) || 5;
+        const classrooms = Array.from({ length: roomCount }, (_, i) => `Room ${i + 1}`);
+        const preferredRoom = batch.classroom || classrooms[0];
+
+        // 3. Consistency Logic: Assign subjects to fixed "Periods"
+        // Periods: Array of [{ day, subject, teacher }]
+        // To maximize consistency, we fill periods such that a subject stays in the same period.
+        
+        const sortedSubjects = [...subjectsConfig].sort((a, b) => b.countPerWeek - a.countPerWeek);
+        const periods = []; // Array of length [max classes per day], each is { subject, days: [] }
+        
+        sortedSubjects.forEach(config => {
+            let placed = false;
+            let needed = config.countPerWeek;
+            
+            // Try to find an existing period that can accommodate this subject
+            // Or create a new one.
+            for (let i = 0; i < periods.length; i++) {
+                // If this period has enough empty days
+                const freeDays = days.filter(d => !periods[i].find(p => p.day === d));
+                if (freeDays.length >= needed) {
+                    for (let j = 0; j < needed; j++) {
+                        periods[i].push({ day: freeDays[j], subject: config.subject });
+                    }
+                    placed = true;
+                    break;
+                }
+            }
+            
+            if (!placed) {
+                const newPeriod = [];
+                for (let j = 0; j < needed; j++) {
+                    newPeriod.push({ day: days[j], subject: config.subject });
+                }
+                periods.push(newPeriod);
+            }
+        });
+
+        // 4. Generate Final Schedule with Conflict Checking
+        const generatedSchedule = [];
+        const sessionOccupancy = JSON.parse(JSON.stringify(occupancy, (key, value) => 
+            value instanceof Set ? Array.from(value) : value
+        ));
+
+        const getOccupancy = (day, time) => {
+            const key = `${day}-${time}`;
+            const data = sessionOccupancy[key] || { rooms: [], teachers: [] };
+            return { rooms: new Set(data.rooms), teachers: new Set(data.teachers) };
+        };
+
+        const updateOccupancy = (day, time, room, teacher) => {
+            const key = `${day}-${time}`;
+            if (!sessionOccupancy[key]) sessionOccupancy[key] = { rooms: [], teachers: [] };
+            sessionOccupancy[key].rooms.push(room);
+            sessionOccupancy[key].teachers.push(teacher);
+        };
+
+        let success = true;
+        for (let pIndex = 0; pIndex < periods.length; pIndex++) {
+            const timeIdx = startIndex + pIndex;
+            if (timeIdx >= timeSlots.length) {
+                success = false;
+                break;
+            }
+            const time = timeSlots[timeIdx];
+
+            for (const item of periods[pIndex]) {
+                const { day, subject } = item;
+                const occ = getOccupancy(day, time);
+                
+                // Find a room and teacher
+                let room = preferredRoom;
+                if (occ.rooms.has(room)) {
+                    room = classrooms.find(r => !occ.rooms.has(r));
+                }
+
+                const teacher = teacherMap[subject].find(t => !occ.teachers.has(t));
+
+                if (!room || !teacher) {
+                    success = false;
+                    break;
+                }
+
+                generatedSchedule.push({
+                    day,
+                    time,
+                    subject,
+                    teacher,
+                    room
+                });
+                updateOccupancy(day, time, room, teacher);
+            }
+            if (!success) break;
+        }
+
+        if (!success) {
+            return res.status(400).json({ 
+                message: 'Could not generate a consistent schedule without conflicts for the selected Start Time. Try a different time or add more rooms.',
+                partialSchedule: generatedSchedule
+            });
+        }
+
+        // 5. Save and Return
+        await Schedule.deleteMany({ batchId });
+        const scheduleDocs = generatedSchedule.map(s => ({
+            batchId,
+            course: batch.course,
+            subject: s.subject,
+            teacher: s.teacher,
+            day: s.day,
+            timeSlot: s.time,
+            roomAllotted: s.room
+        }));
+        await Schedule.insertMany(scheduleDocs);
+
+        await Batch.findByIdAndUpdate(batchId, {
+            schedule: generatedSchedule.map(s => ({
+                day: s.day,
+                time: s.time,
+                subject: s.subject,
+                teacher: s.teacher,
+                room: s.room
+            }))
+        });
+
+        res.json({ 
+            message: 'Smart Timetable generated successfully!', 
+            schedule: generatedSchedule 
+        });
+
+    } catch (err) {
+        console.error('Smart Schedule Error:', err);
+        res.status(500).json({ message: 'Server error during smart scheduling' });
+    }
+};
+
 exports.syncBatchSchedule = async (batchId, course, scheduleArray) => {
     try {
         const Schedule = require('../models/Schedule');

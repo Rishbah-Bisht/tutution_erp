@@ -1,13 +1,13 @@
 const Admin = require('../models/Admin');
 const Student = require('../models/Student');
 const Teacher = require('../models/Teacher');
-const Fee = require('../models/Fee');
 const Batch = require('../models/Batch');
 const AuditLog = require('../models/AuditLog');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('../middleware/auth.middleware');
 const emailService = require('../services/emailService');
+const { connectPostgres, getPrismaClient } = require('../config/postgres');
 
 // Check if admin exists
 exports.checkAdmin = async (req, res) => {
@@ -240,17 +240,28 @@ exports.wipeDatabase = async (req, res) => {
         await Promise.all([
             Student.deleteMany({}),
             Teacher.deleteMany({}),
-            Fee.deleteMany({}),
             Batch.deleteMany({}),
             AuditLog.deleteMany({})
         ]);
+
+        try {
+            await connectPostgres();
+            const prisma = getPrismaClient();
+            await prisma.$transaction([
+                prisma.feePayment.deleteMany({}),
+                prisma.feeBalance.deleteMany({}),
+                prisma.feeStructure.deleteMany({})
+            ]);
+        } catch (error) {
+            console.warn('[WipeDatabase] Prisma fee cleanup skipped:', error.message);
+        }
 
         // Clear OTP fields anyway for clean state
         admin.wipeOtp = null;
         admin.wipeOtpExpiry = null;
         await admin.save();
 
-        res.json({ message: 'Database wiped successfully. All student, teacher, batch, and fee records have been deleted.' });
+        res.json({ message: 'Database wiped successfully. All student, teacher, batch, audit, and PostgreSQL fee records have been deleted.' });
     } catch (err) {
         console.error('[WipeDatabase Error]', err);
         res.status(500).json({ message: 'Server error', error: err.message });

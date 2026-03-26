@@ -7,7 +7,17 @@ const attendanceSchema = new mongoose.Schema({
     date: { type: Date, required: true, index: true },
     attendanceDate: { type: Date, required: true, index: true },
     status: { type: String, enum: ['Present', 'Absent', 'Late'], default: 'Present' },
-    markedBy: { type: mongoose.Schema.Types.ObjectId, default: null },
+    markedBy: { 
+        type: mongoose.Schema.Types.ObjectId, 
+        refPath: 'markedByModel',
+        default: null 
+    },
+    markedByModel: {
+        type: String,
+        required: true,
+        enum: ['Admin', 'Teacher'],
+        default: 'Admin'
+    },
     markedByRole: { type: String, enum: ['admin', 'teacher'], default: 'admin' },
     notes: { type: String, trim: true, default: '' },
     createdAt: { type: Date, default: Date.now },

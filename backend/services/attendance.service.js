@@ -120,25 +120,45 @@ const buildAssignmentQuery = ({ teacherId, batchId, subjectId, activeOnly = true
     return query;
 };
 
-exports.createSubject = async ({ name, code, description }) => {
+exports.createSubject = async ({ name, code, batchId }) => {
     if (!name || !String(name).trim()) {
         const error = new Error('Subject name is required.');
         error.status = 400;
         throw error;
     }
 
+    if (!batchId || !mongoose.Types.ObjectId.isValid(batchId)) {
+        const error = new Error('A valid batchId is required.');
+        error.status = 400;
+        throw error;
+    }
+
+    const batch = await Batch.findById(batchId);
+    if (!batch) {
+        const error = new Error('Batch not found.');
+        error.status = 404;
+        throw error;
+    }
+
     const subject = new Subject({
         name: String(name).trim(),
         code: code ? String(code).trim().toUpperCase() : undefined,
-        description: description ? String(description).trim() : ''
+        batchId: new mongoose.Types.ObjectId(batchId)
     });
 
     await subject.save();
+
+    // Automatically add this new subject to the batch's subject lists
+    await ensureSubjectLinkedToBatch(batch, subject);
+
     return subject.toObject();
 };
 
-exports.listSubjects = async ({ activeOnly = true } = {}) => {
+exports.listSubjects = async ({ activeOnly = true, batchId } = {}) => {
     const query = activeOnly ? { isActive: true } : {};
+    if (batchId) {
+        query.batchId = asObjectId(batchId, 'Batch');
+    }
     return Subject.find(query).sort({ name: 1 }).lean();
 };
 
@@ -420,6 +440,7 @@ exports.markAttendance = async ({ actorRole, actorId, batchId, subjectId, date, 
                         status: entry.status,
                         notes: entry.notes,
                         markedBy: actorId || null,
+                        markedByModel: actorRole === 'admin' ? 'Admin' : 'Teacher',
                         markedByRole: actorRole,
                         updatedAt: new Date()
                     },
@@ -473,6 +494,7 @@ exports.updateAttendanceRecord = async ({ actorRole, actorId, attendanceId, stat
     attendance.status = normalizeStatus(status);
     attendance.notes = notes ? String(notes).trim() : attendance.notes;
     attendance.markedBy = actorId || attendance.markedBy;
+    attendance.markedByModel = actorRole === 'admin' ? 'Admin' : 'Teacher';
     attendance.markedByRole = actorRole;
     attendance.updatedAt = new Date();
 
@@ -541,6 +563,7 @@ exports.getAttendanceReport = async ({
             .populate('studentId', 'name rollNo')
             .populate('batchId', 'name course')
             .populate('subjectId', 'name code')
+            .populate('markedBy', 'adminName name')
             .sort({ attendanceDate: -1, createdAt: -1 })
             .skip(skip)
             .limit(safeLimit)

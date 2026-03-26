@@ -34,5 +34,6 @@ router.get('/config', async (req, res) => {
 router.post('/auto', schedulerController.autoSchedule);
 router.post('/auto-batch', schedulerController.autoScheduleBatch);
 router.post('/expert-auto', schedulerController.expertAISchedule);
+router.post('/smart-auto', schedulerController.smartAutoSchedule);
 
 module.exports = router;

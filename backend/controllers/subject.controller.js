@@ -13,7 +13,8 @@ exports.createSubject = async (req, res) => {
 exports.getSubjects = async (req, res) => {
     try {
         const subjects = await attendanceService.listSubjects({
-            activeOnly: req.query.activeOnly !== 'false'
+            activeOnly: req.query.activeOnly !== 'false',
+            batchId: req.query.batchId
         });
         res.json({ subjects });
     } catch (error) {

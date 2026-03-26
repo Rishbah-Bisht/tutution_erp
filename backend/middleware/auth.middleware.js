@@ -1,5 +1,7 @@
 const jwt = require('jsonwebtoken');
-const SECRET = process.env.JWT_SECRET || 'supersecretkey_for_erp_app';
+const { requireEnv } = require('../config/env');
+
+const SECRET = requireEnv('JWT_SECRET');
 
 // Export the secret so controllers can use the SAME key for signing
 exports.JWT_SECRET = SECRET;

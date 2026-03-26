@@ -1,0 +1,17 @@
+node_modules
+.env
+dist
+build
+.DS_Store
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.idea
+.vscode
+*.sublime-project
+*.sublime-workspace
+.antigravity
+serviceAccountKey.json
+google-services.json
+tmp_*/

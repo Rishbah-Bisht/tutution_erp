@@ -50,13 +50,13 @@ exports.getAllBatches = async (req, res) => {
 // POST /api/batches
 exports.createBatch = async (req, res) => {
     try {
-        const { name, course, capacity, subjects, classroom, schedule, fees, teacher } = req.body;
+        const { name, course, capacity, subjects, classroom, schedule, fees, teacher, startDate, endDate } = req.body;
         if (!name) return res.status(400).json({ message: 'Batch name is required' });
 
         // Build display timeSlots from structured schedule
         const timeSlots = (schedule || []).map(s => `${s.day} ${s.time}`);
 
-        const batch = new Batch({ name, course, capacity, subjects, classroom, schedule, timeSlots, fees, teacher });
+        const batch = new Batch({ name, course, capacity, subjects, classroom, schedule, timeSlots, fees, teacher, startDate, endDate });
         await batch.save();
 
         // CENTRALIZED SYNC

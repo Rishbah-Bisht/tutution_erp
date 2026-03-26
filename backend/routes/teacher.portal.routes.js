@@ -8,5 +8,6 @@ router.use(verifyTeacher);
 router.get('/students', controller.getAssignedStudents);
 router.get('/exams', controller.getTeacherExams);
 router.get('/exams/:id/results', controller.getTeacherExamResults);
+router.get('/salaries', controller.getTeacherSalaries);
 
 module.exports = router;

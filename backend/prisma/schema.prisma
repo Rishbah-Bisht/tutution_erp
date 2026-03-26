@@ -1,0 +1,264 @@
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PaymentMethod {
+  CASH
+  UPI
+  BANK_TRANSFER
+  CARD
+  CHEQUE
+  ONLINE
+}
+
+enum FeeBalanceStatus {
+  CLEAR
+  PENDING
+  OVERDUE
+}
+
+enum PayrollStatus {
+  PENDING
+  PAID
+  PARTIALLY_PAID
+}
+
+enum PayrollDeductionType {
+  LEAVE
+  ADVANCE
+  OTHER
+}
+
+enum PayrollPaymentMethod {
+  CASH
+  UPI
+  BANK_TRANSFER
+  CHEQUE
+  ONLINE
+  OTHER
+}
+
+enum PayrollAuditAction {
+  GENERATED
+  PAYMENT_RECORDED
+}
+
+enum ExpenseStatus {
+  PAID
+  PENDING
+  CANCELLED
+}
+
+enum ExpensePaymentMode {
+  CASH
+  UPI
+  BANK_TRANSFER
+  CARD
+  CHEQUE
+  OTHER
+}
+
+model FeeStructure {
+  id            String       @id @default(cuid())
+  batchId        String
+  monthlyFee     Decimal      @db.Decimal(12, 2)
+  currency       String       @default("INR")
+  dueDay         Int          @default(10)
+  effectiveFrom  DateTime
+  effectiveTo    DateTime?
+  isActive       Boolean      @default(true)
+  notes          String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  feeBalances    FeeBalance[]
+  feePayments    FeePayment[]
+
+  @@unique([batchId, effectiveFrom])
+  @@index([batchId, effectiveFrom, effectiveTo])
+  @@index([batchId, isActive])
+}
+
+model FeePayment {
+  id                   String        @id @default(cuid())
+  studentId            String
+  batchId              String
+  feeBalanceId         String
+  feeStructureId       String?
+  billingMonth         String
+  amount               Decimal       @db.Decimal(12, 2)
+  balanceBeforePayment Decimal       @default(0) @db.Decimal(12, 2)
+  balanceAfterPayment  Decimal       @default(0) @db.Decimal(12, 2)
+  paymentDate          DateTime      @default(now())
+  paymentMethod        PaymentMethod @default(CASH)
+  referenceNo          String?
+  remarks              String?
+  receiptNumber        String        @unique
+  studentNameSnapshot  String?
+  rollNoSnapshot       String?
+  batchNameSnapshot    String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  feeBalance           FeeBalance    @relation(fields: [feeBalanceId], references: [id], onDelete: Restrict)
+  feeStructure         FeeStructure? @relation(fields: [feeStructureId], references: [id], onDelete: SetNull)
+
+  @@index([studentId, paymentDate])
+  @@index([billingMonth])
+}
+
+model FeeBalance {
+  id              String           @id @default(cuid())
+  studentId       String           @unique
+  batchId         String
+  feeStructureId  String?
+  lastChargedMonth String?
+  totalCharged    Decimal          @default(0) @db.Decimal(12, 2)
+  totalPaid       Decimal          @default(0) @db.Decimal(12, 2)
+  currentBalance  Decimal          @default(0) @db.Decimal(12, 2)
+  overdueAmount   Decimal          @default(0) @db.Decimal(12, 2)
+  status          FeeBalanceStatus @default(CLEAR)
+  dueDate         DateTime?
+  lastPaymentAt   DateTime?
+  lastCalculatedAt DateTime        @default(now())
+  notes           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  feeStructure    FeeStructure?    @relation(fields: [feeStructureId], references: [id], onDelete: SetNull)
+  payments        FeePayment[]
+
+  @@index([batchId, status])
+  @@index([dueDate, status])
+}
+
+model TeacherSalary {
+  id              String          @id @default(cuid())
+  teacherId       String
+  baseSalary      Decimal         @db.Decimal(12, 2)
+  currency        String          @default("INR")
+  effectiveFrom   DateTime
+  effectiveTo     DateTime?
+  isActive        Boolean         @default(true)
+  notes           String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  payrollRecords  PayrollRecord[]
+
+  @@unique([teacherId, effectiveFrom])
+  @@index([teacherId, effectiveFrom, effectiveTo])
+  @@index([teacherId, isActive])
+}
+
+model PayrollRecord {
+  id                  String               @id @default(cuid())
+  teacherId           String
+  teacherSalaryId     String?
+  payrollMonth        String
+  baseSalary          Decimal              @db.Decimal(12, 2)
+  extraClassesAmount  Decimal              @default(0) @db.Decimal(12, 2)
+  bonusAmount         Decimal              @default(0) @db.Decimal(12, 2)
+  totalDeductions     Decimal              @default(0) @db.Decimal(12, 2)
+  netSalary           Decimal              @db.Decimal(12, 2)
+  paidAmount          Decimal              @default(0) @db.Decimal(12, 2)
+  outstandingAmount   Decimal              @default(0) @db.Decimal(12, 2)
+  status              PayrollStatus        @default(PENDING)
+  paymentDate         DateTime?
+  paymentMethod       PayrollPaymentMethod?
+  paymentReference    String?
+  remarks             String?
+  teacherNameSnapshot String?
+  regNoSnapshot       String?
+  designationSnapshot String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  teacherSalary       TeacherSalary?       @relation(fields: [teacherSalaryId], references: [id], onDelete: SetNull)
+  deductions          PayrollDeduction[]
+  auditLogs           PayrollAuditLog[]
+
+  @@unique([teacherId, payrollMonth])
+  @@index([payrollMonth, status])
+  @@index([teacherId, payrollMonth])
+}
+
+model PayrollDeduction {
+  id               String               @id @default(cuid())
+  teacherId        String
+  payrollRecordId  String?
+  payrollMonth     String
+  deductionType    PayrollDeductionType @default(OTHER)
+  title            String
+  amount           Decimal              @db.Decimal(12, 2)
+  notes            String?
+  effectiveDate    DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  payrollRecord    PayrollRecord?       @relation(fields: [payrollRecordId], references: [id], onDelete: SetNull)
+
+  @@index([teacherId, payrollMonth])
+  @@index([payrollRecordId])
+}
+
+model PayrollAuditLog {
+  id               String             @id @default(cuid())
+  payrollRecordId  String
+  actorId          String?
+  actorRole        String?
+  action           PayrollAuditAction
+  amount           Decimal?           @db.Decimal(12, 2)
+  message          String?
+  metadata         Json?
+  createdAt        DateTime           @default(now())
+  payrollRecord    PayrollRecord      @relation(fields: [payrollRecordId], references: [id], onDelete: Cascade)
+
+  @@index([payrollRecordId, createdAt])
+}
+
+model ExpenseCategory {
+  id           String          @id @default(cuid())
+  name         String          @unique
+  slug         String          @unique
+  description  String?
+  isActive     Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  expenses     Expense[]
+  budgets      ExpenseBudget[]
+
+  @@index([isActive, name])
+}
+
+model Expense {
+  id            String             @id @default(cuid())
+  title         String
+  categoryId    String
+  amount        Decimal            @db.Decimal(12, 2)
+  expenseDate   DateTime
+  description   String?
+  receiptUrl    String?
+  paymentMode   ExpensePaymentMode @default(CASH)
+  status        ExpenseStatus      @default(PAID)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  category      ExpenseCategory    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@index([expenseDate, status])
+  @@index([categoryId, expenseDate])
+  @@index([status, paymentMode])
+}
+
+model ExpenseBudget {
+  id           String           @id @default(cuid())
+  categoryId   String
+  budgetMonth  String
+  amount       Decimal          @db.Decimal(12, 2)
+  notes        String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  category     ExpenseCategory  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, budgetMonth])
+  @@index([budgetMonth])
+}

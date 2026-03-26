@@ -5,7 +5,6 @@ const Admin = require('../models/Admin');
 const NotificationTemplate = require('../models/NotificationTemplate');
 const { sendPushNotification } = require('./pushNotificationService');
 const { sendEmail } = require('./emailService');
-const { generateFeeReceiptPdf } = require('./pdfService');
 
 const createHttpError = (message, status = 400) => {
     const error = new Error(message);
@@ -395,35 +394,6 @@ const triggerAutomaticNotification = async ({ eventType, studentId, teacherId, m
 
         let emailResult = null;
         let pushResult = null;
-        let attachments = [];
-
-        // Generate PDF Receipt if it's a fee payment and email is being sent
-        if (eventType === 'feePayment' && methods.includes('email') && data.feeId) {
-            console.log(`[NotificationService] Attempting PDF Generation for Fee: ${data.feeId}`);
-            try {
-                const Fee = require('../models/Fee');
-                const feeRecord = await Fee.findById(data.feeId).lean();
-                if (feeRecord) {
-                    const payment = feeRecord.paymentHistory.find(p => p.paymentId === data.paymentId || p.receiptNo === data.receiptNo);
-                    if (payment) {
-                        const pdfBuffer = await generateFeeReceiptPdf({
-                            student: recipient,
-                            payment,
-                            fee: feeRecord,
-                            admin
-                        });
-                        attachments.push({
-                            filename: `Receipt_${payment.receiptNo}.pdf`,
-                            content: pdfBuffer
-                        });
-                        console.log(`[AutoNotification] Generated PDF Receipt for ${payment.receiptNo}. Buffer size: ${pdfBuffer.length}`);
-                    }
-                }
-            } catch (pdfErr) {
-                console.error('[AutoNotification] Failed to generate PDF receipt:', pdfErr.message);
-            }
-        }
-
         // Dispatch Email
         if (methods.includes('email')) {
             emailResult = await sendEmail({
@@ -431,8 +401,7 @@ const triggerAutomaticNotification = async ({ eventType, studentId, teacherId, m
                 teacher: recipientType === 'teacher' ? recipient : null,
                 message: bodyEmail,
                 admin,
-                subjectOverride: subjectEmail,
-                attachments
+                subjectOverride: subjectEmail
             });
         }
 

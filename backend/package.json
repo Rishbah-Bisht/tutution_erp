@@ -4,26 +4,46 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate:fees": "prisma migrate dev --name init_fee_management",
+    "prisma:migrate:payroll": "prisma migrate dev --name add_teacher_payroll",
+    "prisma:migrate:expenses": "prisma migrate dev --name add_expense_tracking",
+    "fees:sync-structures": "node scripts/syncFeeStructuresFromBatches.js",
+    "expenses:seed": "node scripts/seedExpenseTracking.js",
+    "expenses:sync-payroll": "node scripts/syncPayrollExpenses.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@prisma/adapter-pg": "^7.5.0",
+    "@prisma/client": "^7.5.0",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^1.41.3",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
+    "csurf": "^1.11.0",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
+    "express-mongo-sanitize": "^2.2.0",
     "express-rate-limit": "^8.2.1",
+    "express-validator": "^7.3.1",
     "firebase-admin": "^13.7.0",
+    "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.2.3",
     "multer": "^2.0.2",
     "multer-storage-cloudinary": "^4.0.0",
     "node-cron": "^4.2.1",
     "nodemailer": "^8.0.2",
-    "pdfkit": "^0.17.2"
+    "pdfkit": "^0.17.2",
+    "pg": "^8.20.0",
+    "prisma": "^7.5.0",
+    "redis": "^5.11.0",
+    "winston": "^3.19.0",
+    "winston-daily-rotate-file": "^5.0.0",
+    "xss-clean": "^0.1.4"
   }
 }

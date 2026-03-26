@@ -4,6 +4,10 @@ const Student = require('../models/Student');
 const Batch = require('../models/Batch');
 const Attendance = require('../models/Attendance');
 const jwt = require('jsonwebtoken');
+const { requireEnv } = require('../config/env');
+const { connectPostgres, getPrismaClient } = require('../config/postgres');
+
+const JWT_SECRET = requireEnv('JWT_SECRET');
 
 const getActivityConfig = () => ({
     onlineMinutes: Math.max(parseInt(process.env.ACTIVITY_ONLINE_MINUTES || '5', 10) || 5, 1),
@@ -16,7 +20,7 @@ const auth = (req, res, next) => {
     if (!header) return res.status(401).json({ message: 'No token provided' });
     try {
         const token = header.split(' ')[1];
-        req.admin = jwt.verify(token, process.env.JWT_SECRET || 'secret_key');
+        req.admin = jwt.verify(token, JWT_SECRET);
         next();
     } catch {
         res.status(401).json({ message: 'Invalid token' });
@@ -30,12 +34,26 @@ router.get('/', auth, async (req, res) => {
         const now = new Date();
         const onlineThreshold = new Date(now.getTime() - onlineMinutes * 60 * 1000);
         const inactiveThreshold = new Date(now.getTime() - inactiveDays * 24 * 60 * 60 * 1000);
+        let totalFeesPaid = 0;
+
+        try {
+            await connectPostgres();
+            const prisma = getPrismaClient();
+            const feePaymentAggregate = await prisma.feePayment.aggregate({
+                _sum: {
+                    amount: true
+                }
+            });
+            totalFeesPaid = Number(feePaymentAggregate._sum.amount || 0);
+        } catch (error) {
+            console.warn('[AdminDashboard] Prisma fee aggregate unavailable:', error.message);
+        }
 
         // Core counts
-        const [totalStudents, activeBatches, totalFeesPaid, activityStats] = await Promise.all([
+        const [totalStudents, totalTeachers, activeBatches, activityStats] = await Promise.all([
             Student.countDocuments(),
+            require('../models/Teacher').countDocuments(),
             Batch.countDocuments({ isActive: true }),
-            Student.aggregate([{ $group: { _id: null, total: { $sum: '$feesPaid' } } }]),
             Student.aggregate([
                 {
                     $addFields: {
@@ -71,9 +89,6 @@ router.get('/', auth, async (req, res) => {
                 { $group: { _id: '$activityStatus', count: { $sum: 1 } } }
             ])
         ]);
-
-        // Unique teachers from active batches
-        const teachers = await Batch.distinct('teacher', { isActive: true, teacher: { $ne: '' } });
 
         // Recent admissions (last 5)
         const recentAdmissions = await Student.find()
@@ -125,8 +140,8 @@ router.get('/', auth, async (req, res) => {
         res.json({
             totalStudents,
             activeBatches,
-            totalTeachers: teachers.length,
-            totalFeesPaid: totalFeesPaid[0]?.total || 0,
+            totalTeachers,
+            totalFeesPaid,
             recentAdmissions,
             attendanceTrend: trend,
             activitySummary,
@@ -137,5 +152,6 @@ router.get('/', auth, async (req, res) => {
         res.status(500).json({ message: 'Server error', error: error.message });
     }
 });
+
 
 module.exports = router;

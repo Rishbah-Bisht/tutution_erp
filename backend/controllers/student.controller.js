@@ -1,12 +1,10 @@
 const Student = require('../models/Student');
 const Batch = require('../models/Batch');
-const Admin = require('../models/Admin');
-const Fee = require('../models/Fee');
 const Attendance = require('../models/Attendance');
 const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
-const feeController = require('./fee.controller');
 const { triggerAutomaticNotification } = require('../services/notificationService');
+const { connectPostgres, getPrismaClient } = require('../config/postgres');
 
 const getActivityConfig = () => ({
     onlineMinutes: Math.max(parseInt(process.env.ACTIVITY_ONLINE_MINUTES || '5', 10) || 5, 1),
@@ -108,6 +106,8 @@ const toActivityFilters = (query = {}) => {
     return { activityStatus, studentStatus };
 };
 
+const toMoney = (value) => Number(Number(value || 0).toFixed(2));
+
 // GET /api/students/stats
 exports.getStudentStats = async (req, res) => {
     try {
@@ -115,15 +115,30 @@ exports.getStudentStats = async (req, res) => {
         const active = await Student.countDocuments({ status: 'active' });
         const completed = await Student.countDocuments({ status: 'completed' });
 
-        // Fee pending: unique students who are ACTIVE and have at least one non-deleted fee record that is not 'paid'
-        const pendingFeeStudentIds = await Fee.distinct('studentId', {
-            status: { $in: ['pending', 'partial', 'overdue'] },
-            isDeleted: { $ne: true }
-        });
-        const feePending = await Student.countDocuments({
-            _id: { $in: pendingFeeStudentIds },
-            status: 'active'
-        });
+        let feePending = 0;
+        try {
+            await connectPostgres();
+            const prisma = getPrismaClient();
+            const pendingBalances = await prisma.feeBalance.findMany({
+                where: {
+                    status: { in: ['PENDING', 'OVERDUE'] }
+                },
+                select: {
+                    studentId: true
+                }
+            });
+
+            const pendingFeeStudentIds = pendingBalances
+                .map((row) => row.studentId)
+                .filter((id) => mongoose.Types.ObjectId.isValid(id));
+
+            feePending = await Student.countDocuments({
+                _id: { $in: pendingFeeStudentIds },
+                status: 'active'
+            });
+        } catch (error) {
+            console.warn('[StudentStats] Prisma fee balances unavailable:', error.message);
+        }
 
         // New admissions this month
         const startOfMonth = new Date();
@@ -401,15 +416,10 @@ exports.createStudent = async (req, res) => {
             });
         }
 
-        // Automatically ensure fee for current month ONLY if batch assigned
-        if (student.batchId) {
-            await feeController.ensureMonthlyFeeForStudents([student._id]);
-        }
-
         const result = student.toObject();
         delete result.password;
         res.status(201).json({
-            message: student.batchId ? 'Student created and fee generated' : 'Student created (Batch Pending)',
+            message: student.batchId ? 'Student created successfully' : 'Student created (Batch Pending)',
             student: result
         });
     } catch (err) {
@@ -450,11 +460,7 @@ exports.updateStudent = async (req, res) => {
 
         const student = await Student.findByIdAndUpdate(req.params.id, data, { new: true });
 
-        // If batch was just assigned, generate fees
         if (isActivatingBatch) {
-            await feeController.ensureMonthlyFeeForStudents([student._id]);
-
-            // Send batch assignment notification
             if (student && data.batchId) {
                 const batch = await require('../models/Batch').findById(data.batchId);
                 await triggerAutomaticNotification({
@@ -471,7 +477,7 @@ exports.updateStudent = async (req, res) => {
         }
 
         res.json({
-            message: isActivatingBatch ? 'Batch assigned and fees generated' : 'Updated',
+            message: isActivatingBatch ? 'Batch assigned successfully' : 'Updated',
             student
         });
     } catch (err) {
@@ -484,6 +490,16 @@ exports.deleteStudent = async (req, res) => {
     try {
         const student = await Student.findByIdAndDelete(req.params.id);
         if (!student) return res.status(404).json({ message: 'Student not found' });
+
+        try {
+            await connectPostgres();
+            const prisma = getPrismaClient();
+            await prisma.feePayment.deleteMany({ where: { studentId: student._id.toString() } });
+            await prisma.feeBalance.deleteMany({ where: { studentId: student._id.toString() } });
+        } catch (error) {
+            console.warn('[deleteStudent] Prisma fee cleanup skipped:', error.message);
+        }
+
         res.json({ message: 'Deleted' });
     } catch (err) {
         res.status(500).json({ message: 'Server error', error: err.message });
@@ -494,6 +510,16 @@ exports.deleteStudent = async (req, res) => {
 exports.deleteAllStudents = async (req, res) => {
     try {
         await Student.deleteMany({});
+
+        try {
+            await connectPostgres();
+            const prisma = getPrismaClient();
+            await prisma.feePayment.deleteMany({});
+            await prisma.feeBalance.deleteMany({});
+        } catch (error) {
+            console.warn('[deleteAllStudents] Prisma fee cleanup skipped:', error.message);
+        }
+
         res.json({ message: 'All students deleted successfully' });
     } catch (err) {
         res.status(500).json({ message: 'Server error', error: err.message });
@@ -521,7 +547,6 @@ exports.bulkUpload = async (req, res) => {
         let successCount = 0;
         let failedCount = 0;
         const errors = [];
-        const newStudentIds = [];
 
         // Pre-fetch all active batches to build a fast memory map for name resolution
         const allBatches = await Batch.find({ isActive: true }).select('_id name');
@@ -593,9 +618,6 @@ exports.bulkUpload = async (req, res) => {
                     });
                 }
 
-                if (student.batchId) {
-                    newStudentIds.push(student._id);
-                }
                 successCount++;
             } catch (err) {
                 failedCount++;
@@ -603,13 +625,8 @@ exports.bulkUpload = async (req, res) => {
             }
         }));
 
-        // Generate fees ONLY for students who were successfully assigned a batch
-        if (newStudentIds.length > 0) {
-            await feeController.ensureMonthlyFeeForStudents(newStudentIds);
-        }
-
         res.status(201).json({
-            message: `${successCount} students inserted, ${failedCount} failed. Fees generated for new admissions.`,
+            message: `${successCount} students inserted, ${failedCount} failed.`,
             total: students.length,
             success: successCount,
             failed: failedCount,
@@ -659,11 +676,41 @@ exports.getStudentById = async (req, res) => {
             .lean();
 
         if (!student) return res.status(404).json({ message: 'Student not found' });
+        let feeBalance = null;
+        let feePayments = [];
 
-        // Get full fee history for this student
-        const fees = await Fee.find({ studentId: student._id })
-            .sort({ createdAt: -1 })
-            .lean();
+        try {
+            await connectPostgres();
+            const prisma = getPrismaClient();
+            const studentId = student._id.toString();
+            const [balanceRecord, paymentRecords] = await Promise.all([
+                prisma.feeBalance.findUnique({
+                    where: { studentId }
+                }),
+                prisma.feePayment.findMany({
+                    where: { studentId },
+                    orderBy: { paymentDate: 'desc' }
+                })
+            ]);
+
+            feeBalance = balanceRecord ? {
+                ...balanceRecord,
+                totalCharged: toMoney(balanceRecord.totalCharged),
+                totalPaid: toMoney(balanceRecord.totalPaid),
+                currentBalance: toMoney(balanceRecord.currentBalance),
+                overdueAmount: toMoney(balanceRecord.overdueAmount),
+                status: String(balanceRecord.status || '').toLowerCase()
+            } : null;
+
+            feePayments = paymentRecords.map((payment) => ({
+                ...payment,
+                amount: toMoney(payment.amount),
+                balanceBeforePayment: toMoney(payment.balanceBeforePayment),
+                balanceAfterPayment: toMoney(payment.balanceAfterPayment)
+            }));
+        } catch (error) {
+            console.warn('[getStudentById] Prisma fee lookup unavailable:', error.message);
+        }
 
         const { start, end } = getAttendanceDateRange();
         const attendanceMap = await buildAttendanceSummaryMap([student._id], { dateFrom: start, dateTo: end });
@@ -677,7 +724,9 @@ exports.getStudentById = async (req, res) => {
 
         res.json({
             student: { ...student, activity: deriveActivityStatus(student), attendanceSummary },
-            fees
+            feeBalance,
+            feePayments,
+            fees: feePayments
         });
     } catch (err) {
         res.status(500).json({ message: 'Server error', error: err.message });
