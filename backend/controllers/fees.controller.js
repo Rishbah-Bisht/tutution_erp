@@ -1,6 +1,7 @@
 const Fee = require('../models/Fee');
 const Student = require('../models/Student');
 const Batch = require('../models/Batch');
+const { triggerAutomaticNotification } = require('../services/notificationService');
 
 // Helper to recalc pending & status
 const recalcStatus = (feeDoc) => {
@@ -142,6 +143,20 @@ exports.createFee = async (req, res) => {
         });
 
         await fee.save();
+
+        triggerAutomaticNotification({
+            eventType: 'feeGenerated',
+            studentId: student._id,
+            adminId: req.admin?.id || null,
+            message: `New fee generated for ${month} ${year}. Due date: ${new Date(dueDate).toLocaleDateString('en-IN')}.`,
+            data: {
+                amount: totalFee,
+                month,
+                year,
+                dueDate: new Date(dueDate).toLocaleDateString('en-IN')
+            }
+        }).catch((error) => console.error('[fees.createFee.notification]', error));
+
         return res.status(201).json({ success: true, fee });
     } catch (err) {
         console.error('Error creating fee:', err);
@@ -187,6 +202,24 @@ exports.recordPayment = async (req, res) => {
         });
 
         await fee.save();
+
+        const student = await Student.findById(fee.studentId).select('_id name').lean();
+        if (student?._id) {
+            triggerAutomaticNotification({
+                eventType: 'feePayment',
+                studentId: student._id,
+                adminId: req.admin?.id || null,
+                message: `Payment of Rs ${paid} received. Receipt: ${receiptNo}.`,
+                data: {
+                    amountPaid: paid,
+                    receiptNo,
+                    month: fee.month,
+                    year: fee.year,
+                    dueDate: fee.dueDate ? new Date(fee.dueDate).toLocaleDateString('en-IN') : ''
+                }
+            }).catch((error) => console.error('[fees.recordPayment.notification]', error));
+        }
+
         return res.json({ success: true, receiptNo, fee });
     } catch (err) {
         console.error('Error recording payment:', err);
@@ -242,6 +275,7 @@ exports.generateFeesBulk = async (req, res) => {
         }
 
         const feesToCreate = [];
+        const generatedFeeNotificationTargets = [];
         for (const student of students) {
             const exists = await Fee.findOne({ studentId: student._id, month, year });
             if (exists) continue;
@@ -265,10 +299,32 @@ exports.generateFeesBulk = async (req, res) => {
                 dueDate: new Date(dueDate)
             });
             feesToCreate.push(fee);
+            generatedFeeNotificationTargets.push({
+                studentId: student._id,
+                amount: totalFee,
+                month,
+                year,
+                dueDate: new Date(dueDate).toLocaleDateString('en-IN')
+            });
         }
 
         if (feesToCreate.length) {
             await Fee.insertMany(feesToCreate);
+
+            generatedFeeNotificationTargets.forEach((target) => {
+                triggerAutomaticNotification({
+                    eventType: 'feeGenerated',
+                    studentId: target.studentId,
+                    adminId: req.admin?.id || null,
+                    message: `New fee generated for ${target.month} ${target.year}. Due date: ${target.dueDate}.`,
+                    data: {
+                        amount: target.amount,
+                        month: target.month,
+                        year: target.year,
+                        dueDate: target.dueDate
+                    }
+                }).catch((error) => console.error('[fees.generateFeesBulk.notification]', error));
+            });
         }
 
         return res.json({ success: true, created: feesToCreate.length });
@@ -281,8 +337,46 @@ exports.generateFeesBulk = async (req, res) => {
 // POST /api/fees/remind-overdue
 exports.remindOverdue = async (req, res) => {
     try {
-        // Placeholder: integrate with notification service if needed
-        return res.json({ success: true, message: 'Overdue reminders triggered (stub).' });
+        const now = new Date();
+
+        const overdueFees = await Fee.find({
+            pendingAmount: { $gt: 0 },
+            dueDate: { $lt: now },
+            status: { $in: ['pending', 'partial', 'overdue'] }
+        }).select('_id studentId month year pendingAmount dueDate status').lean();
+
+        if (!overdueFees.length) {
+            return res.json({ success: true, overdueCount: 0, notified: 0, message: 'No overdue fees found.' });
+        }
+
+        const overdueIds = overdueFees.map((fee) => fee._id);
+        await Fee.updateMany(
+            { _id: { $in: overdueIds }, status: { $in: ['pending', 'partial'] } },
+            { $set: { status: 'overdue' } }
+        );
+
+        overdueFees.forEach((fee) => {
+            triggerAutomaticNotification({
+                eventType: 'feeOverdue',
+                studentId: fee.studentId,
+                adminId: req.admin?.id || null,
+                message: `Fee overdue alert for ${fee.month} ${fee.year}. Pending amount: Rs ${fee.pendingAmount}.`,
+                data: {
+                    pendingAmount: fee.pendingAmount,
+                    month: fee.month,
+                    year: fee.year,
+                    dueDate: fee.dueDate ? new Date(fee.dueDate).toLocaleDateString('en-IN') : '',
+                    deadline: now.toLocaleDateString('en-IN')
+                }
+            }).catch((error) => console.error('[fees.remindOverdue.notification]', error));
+        });
+
+        return res.json({
+            success: true,
+            overdueCount: overdueFees.length,
+            notified: overdueFees.length,
+            message: `Overdue reminders triggered for ${overdueFees.length} fee records.`
+        });
     } catch (err) {
         console.error('Error sending overdue reminders:', err);
         return res.status(500).json({ message: 'Server error', error: err.message });

@@ -3,8 +3,51 @@ const path = require('path');
 
 let firebaseApp;
 
+const decodePrivateKeyFromBase64 = (value) => {
+    try {
+        return Buffer.from(String(value || ''), 'base64').toString('utf8');
+    } catch (error) {
+        console.error('[Firebase] Failed to decode FIREBASE_PRIVATE_KEY_BASE64:', error.message);
+        return '';
+    }
+};
+
+const getServiceAccountFromEnv = () => {
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY_BASE64
+        ? decodePrivateKeyFromBase64(process.env.FIREBASE_PRIVATE_KEY_BASE64)
+        : process.env.FIREBASE_PRIVATE_KEY;
+
+    if (!projectId || !clientEmail || !privateKeyRaw) {
+        return null;
+    }
+
+    // Support private keys stored with escaped newlines in .env files.
+    const privateKey = privateKeyRaw.replace(/\\n/g, '\n');
+
+    return {
+        projectId,
+        clientEmail,
+        privateKey
+    };
+};
+
 try {
-    // Try to load service account from environment variable first
+    // Try to load service account from structured environment variables first
+    const serviceAccountFromEnv = getServiceAccountFromEnv();
+    if (serviceAccountFromEnv) {
+        if (admin.apps.length > 0) {
+            firebaseApp = admin.app();
+            console.log('[Firebase] Already initialized, reusing existing app.');
+        } else {
+            firebaseApp = admin.initializeApp({
+                credential: admin.credential.cert(serviceAccountFromEnv)
+            });
+            console.log('[Firebase] Initialized using FIREBASE_* env variables.');
+        }
+    }
+    // Backward compatibility: single JSON env variable
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
         if (admin.apps.length > 0) {
             firebaseApp = admin.app();
@@ -16,7 +59,7 @@ try {
             });
             console.log('[Firebase] Initialized using environment variable.');
         }
-    } else {
+    } else if (!firebaseApp) {
         // Fallback to local file
         const serviceAccountPath = path.resolve(__dirname, '../serviceAccountKey.json');
         

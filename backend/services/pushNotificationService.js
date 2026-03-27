@@ -6,6 +6,26 @@ const INVALID_TOKEN_ERRORS = [
     'messaging/invalid-registration-token',
 ];
 
+const looksLikeInvalidTokenError = (error) => {
+    const code = String(error?.code || '').toLowerCase();
+    const message = String(error?.message || '').toLowerCase();
+    return (
+        INVALID_TOKEN_ERRORS.includes(code) ||
+        message.includes('requested entity was not found') ||
+        message.includes('registration token is not a valid fcm registration token') ||
+        message.includes('not registered')
+    );
+};
+
+const cleanupFailedTokens = async ({ failedTokens = [], studentId, recipientType }) => {
+    if (!failedTokens.length || !studentId) return;
+    const Model = recipientType === 'teacher' ? require('../models/Teacher') : Student;
+    await Model.updateOne(
+        { _id: studentId },
+        { $pull: { deviceTokens: { $in: failedTokens } } }
+    );
+};
+
 /**
  * Send push notification using Firebase Admin SDK
  * Supports individual tokens, multicast, and topics.
@@ -90,26 +110,8 @@ const sendPushNotification = async (payload) => {
             };
         }
 
-        if (tokens.length === 1) {
-            const singleTokenPayload = {
-                token: tokens[0],
-                notification: notificationPayload,
-                data: commonData,
-                android: androidConfig,
-                apns: apnsConfig
-            };
-            console.log('[PushService] Sending to single token payload:', JSON.stringify(singleTokenPayload, null, 2));
-            const response = await messaging.send(singleTokenPayload);
-            console.log('[PushService] Single token send response:', JSON.stringify(response, null, 2));
-            return {
-                status: 'sent',
-                providerMessageId: response,
-                error: '',
-                meta: { token: tokens[0] }
-            };
-        }
-
-        // Multicast for multiple tokens
+        // Use multicast for both single and multiple tokens so token failures
+        // are returned in response.responses instead of throwing directly.
         const multicastPayload = {
             tokens: tokens,
             notification: notificationPayload,
@@ -129,13 +131,11 @@ const sendPushNotification = async (payload) => {
                 }
             });
 
-            if (failedTokens.length > 0 && student?._id) {
-                const Model = recipientType === 'teacher' ? require('../models/Teacher') : Student;
-                await Model.updateOne(
-                    { _id: student._id },
-                    { $pull: { deviceTokens: { $in: failedTokens } } }
-                );
-            }
+            await cleanupFailedTokens({
+                failedTokens,
+                studentId: student?._id,
+                recipientType
+            });
         }
 
         if (response.successCount > 0) {
@@ -150,14 +150,35 @@ const sendPushNotification = async (payload) => {
             };
         }
 
+        const firstError = response.responses[0]?.error;
+        const firstErrorMessage = firstError?.message || 'All tokens failed.';
+
         return {
             status: 'failed',
-            error: response.responses[0]?.error?.message || 'All tokens failed.',
+            error: looksLikeInvalidTokenError(firstError)
+                ? 'Device token is invalid/expired. It has been removed; ask the user to reopen the app and re-register notifications.'
+                : firstErrorMessage,
             meta: response
         };
 
     } catch (error) {
         console.error('[PushNotificationService] FCM Error:', error);
+
+        if (looksLikeInvalidTokenError(error)) {
+            const tokens = Array.from(new Set((student?.deviceTokens || []).filter(token => typeof token === 'string' && token.length > 10)));
+            await cleanupFailedTokens({
+                failedTokens: tokens,
+                studentId: student?._id,
+                recipientType
+            });
+
+            return {
+                status: 'failed',
+                error: 'Device token is invalid/expired. It has been removed; ask the user to reopen the app and re-register notifications.',
+                meta: { code: error.code, reason: error.message }
+            };
+        }
+
         return {
             status: 'failed',
             error: error.message,

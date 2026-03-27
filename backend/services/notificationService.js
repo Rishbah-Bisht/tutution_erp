@@ -333,13 +333,8 @@ const triggerAutomaticNotification = async ({ eventType, studentId, teacherId, m
         const isEmailEnabled = admin.emailEvents?.[eventType] !== false;
         let isPushEnabled = admin.pushEvents?.[eventType] !== false;
 
-        // Force disable push for fee submission as per user request
-        if (eventType === 'feePayment') {
-            isPushEnabled = false;
-        }
-
         if (!isEmailEnabled && !isPushEnabled) {
-            console.log(`[AutoNotification] Skipped: Both Email and Push for ${eventType} are disabled (or Push forced OFF)`);
+            console.log(`[AutoNotification] Skipped: Both Email and Push for ${eventType} are disabled`);
             return;
         }
 
