@@ -16,15 +16,29 @@ const getBaseUrl = () => {
 export const API_BASE_URL = getBaseUrl().replace(/\/$/, '');
 export const TEACHER_API_BASE_URL = (import.meta.env.VITE_TEACHER_API_BASE_URL || API_BASE_URL).replace(/\/$/, '');
 
+export const attachAuthToken = (instance) => {
+    instance.interceptors.request.use((config) => {
+        if (typeof window !== 'undefined') {
+            const token = window.localStorage.getItem('authToken');
+            if (token) {
+                config.headers = config.headers || {};
+                config.headers.Authorization = `Bearer ${token}`;
+            }
+        }
+        return config;
+    });
+    return instance;
+};
+
 
 // Configured axios instance for generic API calls
-const apiClient = axios.create({
+const apiClient = attachAuthToken(axios.create({
     baseURL: `${API_BASE_URL}/api`,
     withCredentials: true,
     headers: {
         'Content-Type': 'application/json'
     }
-});
+}));
 
 apiClient.interceptors.response.use(
     (response) => response,

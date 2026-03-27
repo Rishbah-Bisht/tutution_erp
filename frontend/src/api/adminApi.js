@@ -1,22 +1,11 @@
 import axios from 'axios';
-import { API_BASE_URL } from './apiConfig';
+import { API_BASE_URL, attachAuthToken } from './apiConfig';
 
 
-const API = axios.create({
+const API = attachAuthToken(axios.create({
     baseURL: `${API_BASE_URL}/api/admin`,
     withCredentials: true
-});
-
-API.interceptors.request.use((config) => {
-    if (typeof window !== 'undefined') {
-        const token = localStorage.getItem('authToken');
-        if (token) {
-            config.headers = config.headers || {};
-            config.headers.Authorization = `Bearer ${token}`;
-        }
-    }
-    return config;
-});
+}));
 
 export const checkAdminExists = () => API.get('/check-admin');
 export const adminSignup = (data) => API.post('/signup', data);
